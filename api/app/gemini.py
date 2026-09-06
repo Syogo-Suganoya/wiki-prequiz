@@ -21,18 +21,16 @@ from app.models import Question
 
 log = logging.getLogger(__name__)
 
-# 長考は要らない。記事1本からの作問でレイテンシとコストを無駄に増やさない
+# 記事1本からの作問に長考は要らない
 THINKING_LEVEL = types.ThinkingLevel.LOW
 
-# もう一度頼めば通る見込みのあるもの。混雑・レート制限・一時障害。
-# 400 番台の大半（キーが違う、入力が不正）は何度やっても同じなので入れない
+# もう一度頼めば通る見込みのあるもの。400 番台の大半は何度やっても同じなので入れない
 RETRYABLE_STATUS = {429, 500, 502, 503, 504}
 
-# 待ち時間。予習は最短30秒なので、そこに収まる範囲で刻む。
-# 長さ＝再試行の回数（初回を含めて4回）
+# 待ち時間。予習は最短30秒なので、そこに収まる範囲で刻む（長さ＝再試行の回数）
 BACKOFF_SEC = (1.0, 3.0, 6.0)
 
-# 設定が悪いときの文言。待っても直らないので、そう分かるように書く
+# 待っても直らない失敗の文言
 SETUP_PROBLEM = "AI の利用設定に問題があります（管理者の対応が要ります）"
 
 
@@ -51,16 +49,13 @@ class GeneratedQuestions(BaseModel):
 class GeminiError(RuntimeError):
     """作問に失敗した。
 
-    **メッセージはそのまま遊んでいる人の画面に出る**（`rooms/{id}.quizError`）。
-    例外の型名やスタックではなく、状況と次の行動が分かる日本語を入れること。
+    **メッセージはそのまま画面に出る**（`rooms/{id}.quizError`）。
+    状況と次の行動が分かる日本語を入れること。
     """
 
 
 def _friendly(exc: genai_errors.APIError) -> str:
-    """API の失敗を、遊んでいる人に見せる一文にする。
-
-    「何が起きたか」ではなく「待てば直るのか、人を呼ぶのか」が分かるように。
-    """
+    """「待てば直るのか、人を呼ぶのか」が分かる一文にする。"""
     code = getattr(exc, "code", None)
     if code in (429, 503):
         return "AI が混み合っています。少し待つと出題が始まります"
@@ -69,8 +64,7 @@ def _friendly(exc: genai_errors.APIError) -> str:
     if code in (401, 403):
         return SETUP_PROBLEM
     if code == 400:
-        # キーが無効なときも 400 が返る（status は INVALID_ARGUMENT）。
-        # 記事のせいにすると、直すべき場所を見誤らせる
+        # キーが無効なときも 400。記事のせいにすると直すべき場所を見誤らせる
         if "api key" in str(getattr(exc, "message", "")).lower():
             return SETUP_PROBLEM
         return "この記事からは問題を作れませんでした"
@@ -80,8 +74,7 @@ def _friendly(exc: genai_errors.APIError) -> str:
 def _generate(contents: str, schema: type[BaseModel]) -> types.GenerateContentResponse:
     """混雑や一時障害は数回まで待って粘る。
 
-    実測で 503（高負荷）が2回続いてから通ったことがある。予習の数十秒のうちに
-    間に合わせたいので、諦めずに刻んで待つ。
+    実測で 503 が2回続いてから通ったことがある。予習の数十秒のうちに間に合わせたい。
     キーが違うような直らない失敗は、待っても無駄なのですぐ諦める。
     """
     model = get_settings().gemini_model

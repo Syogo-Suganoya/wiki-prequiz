@@ -26,22 +26,13 @@
 | Vercel プロジェクト名 | `wiki-prequiz` |
 | 本番ドメイン | `https://wiki-prequiz.vercel.app` |
 
-リポジトリ名は `wiki-prequiz`、内部の識別子は `prequiz-*` で揃えてある。
-`prequiz` が語幹なので、`prequiz-api` は「wiki-prequiz の API」として読める。
-Compose のコンテナ名（`prequiz-api` / `prequiz-web`）とも一致する。
-
-> **プロジェクト ID は全世界で一意。** `wiki-prequiz` が既に使われていたら
+> **プロジェクト ID は全世界で一意で、後から変更できない。** 既に使われていたら
 > `wiki-prequiz-1` などにして、以降の `wiki-prequiz` を読み替える。
-> **ID は後から変更できない**ので、作成時に確定させること。
->
-> `<PROJECT_NUMBER>` だけはプロジェクト作成後に決まるので、ここでは伏せてある。
-> ```bash
-> gcloud projects describe wiki-prequiz --format='value(projectNumber)'
-> ```
+> `<PROJECT_NUMBER>` は `gcloud projects describe wiki-prequiz --format='value(projectNumber)'`。
 
-> **原則**: サービスアカウントの鍵ファイル（JSON）は作らない。
-> Cloud Run にはサービスアカウントを紐付け、GitHub Actions からは Workload Identity 連携を使う。
-> 鍵を発行すると、漏れたときに失効させる以外の手段がなくなる。
+**サービスアカウントの鍵ファイル（JSON）は作らない。** Cloud Run には紐付け、
+GitHub Actions からは Workload Identity 連携を使う。
+鍵は漏れたときに失効させる以外の手段がない。
 
 ---
 
@@ -98,7 +89,6 @@ Firebase コンソール → **Firestore Database** → **データベースの�
 本番環境モード → ロケーション `asia-northeast1`。
 
 > **ロケーションは後から変更できない。** Cloud Run と同じリージョンにする。
-> 本番環境モードで作れば既定で全拒否になり、次の手順でルールを流し込むまで安全側に倒れる。
 
 ---
 
@@ -147,17 +137,14 @@ Firebase コンソール → **Firestore Database → ルール** に
 インデックスは **インデックス** タブから
 [`firebase/firestore.indexes.json`](firebase/firestore.indexes.json) の定義を手で登録する。
 
-> GUI での貼り付けはファイルとの食い違いが起きやすい。CLI を勧める。
-
 ---
 
 ## 4. API を Cloud Run へ
 
 ### 秘密は Secret Manager に置く
 
-環境変数に直接書かない。リビジョンの設定に平文で残り、閲覧権限のある全員に見えるため。
-
-2つある。**Gemini のキー**と、**記事プール構築の合言葉**。
+環境変数に直接書かない（リビジョンの設定に平文で残る）。
+**Gemini のキー**と**記事プール構築の合言葉**の2つ。
 
 ```bash
 printf '%s' 'AIza...' | gcloud secrets create gemini-api-key \
@@ -211,7 +198,6 @@ gcloud run deploy prequiz-api \
 
 > `WIKIMEDIA_USER_AGENT` には**連絡が取れる URL かメールアドレスが要る**。
 > Wikimedia は識別できない User-Agent を 403 で弾く。
-> ここではリポジトリの URL を連絡先にしている。
 
 ### 確認
 
@@ -229,8 +215,7 @@ curl https://<Cloud Run の URL>/api/health
 ```
 
 > **`using_emulator` が `true` なら本番設定が壊れている。**
-> `FIRESTORE_EMULATOR_HOST` が環境変数に紛れ込んでいる。
-> 残っていると存在しないエミュレータへ繋ごうとして全機能が落ちる。
+> `FIRESTORE_EMULATOR_HOST` が紛れ込むと、存在しないエミュレータへ繋ごうとして全機能が落ちる。
 
 ---
 
@@ -243,26 +228,20 @@ curl https://<Cloud Run の URL>/api/health
 | `/` | LP（[`lp/`](lp/) の静的ファイル） |
 | `/quiz` | ゲーム本体（[`web/`](web/) の Vite ビルド） |
 
-分けても動くが、同じサイトに並べたほうが LP からゲームへの導線が
-相対パス（`/quiz`）で済み、プレビューデプロイでも繋がったまま追随する。
+同じサイトに並べると、LP からの導線が相対パス（`/quiz`）で済み、
+プレビューデプロイでも繋がったまま追随する。
 
-合成の指示は [`vercel.json`](vercel.json) にある。`web` をビルドし、
-`lp/` を出力の直下に、`web/dist/` を `quiz/` に置くだけ。
-アプリ側は [`web/vite.config.ts`](web/vite.config.ts) の `base` が
-ビルド時だけ `/quiz/` になるので、アセットの参照先もそこに揃う。
+合成の指示は [`vercel.json`](vercel.json)。`lp/` を出力の直下に、
+`web/dist/` を `quiz/` に置くだけ。
 
 ### `api/` は Vercel に渡さない
 
 [`.vercelignore`](.vercelignore) で `api/` を除いてある。**消してはいけない。**
 
-Vercel は直下の `api/` を**サーバーレス関数の置き場**とみなす決まりがあり、
-中の [`pyproject.toml`](api/pyproject.toml) を見つけて Python ランタイムを
-組み立てようとする。だが `api/pyproject.toml` は ruff と mypy と pytest の
-設定を書いただけのファイルで `[project]` テーブルが無いため、
-`No 'project' table found` でビルドが落ちる。
-
-ここの `api/` は Cloud Run で動かす FastAPI であって Vercel の関数ではない。
-名前がぶつかっているだけなので、渡さないのが正しい。
+Vercel は直下の `api/` をサーバーレス関数の置き場とみなし、
+[`pyproject.toml`](api/pyproject.toml) から Python ランタイムを組み立てようとする。
+このファイルは ruff / mypy / pytest の設定だけで `[project]` が無いため、
+`No 'project' table found` でビルドが落ちる。名前がぶつかっているだけ。
 
 ### 自動ビルドを止めたいとき
 
@@ -273,13 +252,9 @@ Vercel は直下の `api/` を**サーバーレス関数の置き場**とみな�
 ### ロックファイルは全プラットフォーム分を入れておく
 
 [`web/package-lock.json`](web/package-lock.json) は**必ずホスト側の新しい npm で作る**。
-開発用コンテナ（Node 22 / npm 10.9）の中で `npm install` すると、
-プラットフォーム別の任意依存が**そのコンテナの分（linux-arm64）しか記録されない**。
-すると別のプラットフォームで `npm ci` が落ちる。
-
-* Vercel（linux-x64・新しい npm）… `package.json and package-lock.json are in sync` ではない、と拒否される
-* GitHub Actions（linux-x64）… `Unable to resolve @typescript/typescript-linux-x64`
-* 手元の macOS … `Unable to resolve @typescript/typescript-darwin-arm64`
+開発用コンテナ（npm 10.9）の中で `npm install` すると、プラットフォーム別の任意依存が
+**そのコンテナの分しか記録されず**、Vercel も GitHub Actions も `npm ci` で落ちる
+（`Unable to resolve @typescript/typescript-linux-x64` など）。
 
 依存を足したり替えたりしたら、`web/` でこれを走らせて差分をコミットする。
 
@@ -315,21 +290,14 @@ vercel --prod
 
 4. **Deploy**。
 
-> **`VITE_API_BASE_URL` は必須。** 画面は `/api/...` を叩くが、
-> Vercel にその転送先は無い。未設定だと同一オリジンに投げて全部 404 になり、
-> 画面は出るのにゲームが始まらない。
-> 末尾に `/api` や `/` を付けないこと（コード側が `/api` を足す）。
+> **`VITE_API_BASE_URL` は必須。** 未設定だと同一オリジンに投げて全部 404 になり、
+> 画面は出るのにゲームが始まらない。末尾に `/api` や `/` を付けない（コード側が足す）。
 
-> `VITE_` の付いた値は**ビルド時にバンドルへ埋め込まれ、閲覧者から見える**。
-> Gemini のキーをここに置いてはいけない。あれはサーバー専用で、
-> Secret Manager から Cloud Run にだけ渡す。
+> `VITE_` の付いた値は**バンドルに埋め込まれ、閲覧者から見える**。
+> Gemini のキーをここに置いてはいけない（サーバー専用）。
 
-画面は API 越し（`fetch`）で動いていて、**Firebase Web SDK はまだ使っていない**。
-`VITE_FIREBASE_API_KEY` などのウェブアプリ構成が要るのは、
-[DESIGN.md](DESIGN.md) に未着手として挙げてある Firestore の直接購読と
-匿名認証を実装したときから。値は Firebase コンソールの
-[ウェブアプリ設定](https://console.firebase.google.com/project/wiki-prequiz/settings/general)
-にある `firebaseConfig` から取る。
+Firebase Web SDK はまだ使っていないので、`VITE_FIREBASE_API_KEY` などの
+ウェブアプリ構成が要るのは Firestore の直接購読と匿名認証を実装してから。
 
 ### デプロイ後
 
@@ -353,13 +321,10 @@ Vercel 側では撮影しない（Chromium もエミュレータも要るため�
 
 ## 7. 記事プールの補充（手動）
 
-実データで動かすとき、出題の題材は `articles` コレクションに貯めておく。
-ゲーム開始時に何十本も取りに行くとレイテンシが跳ねるため。
-
-**定期実行は置いていない。貯めたいときに手で叩く。**
-人気記事の顔ぶれは日単位でしか動かないうえ、Wikimedia の人気一覧は
-出題に向かない記事（スタブ、曖昧さ回避、季節ネタ、公序良俗に触れるもの）も返す。
-勝手に増え続けるより、人の目を通したタイミングで足すほうが扱いやすい。
+出題の題材は `articles` コレクションに貯めておく（開始時に何十本も取りに行くと
+レイテンシが跳ねるため）。**定期実行は置いていない。貯めたいときに手で叩く。**
+人気記事の顔ぶれは日単位でしか動かないうえ、出題に向かない記事も混ざるので、
+人の目を通したタイミングで足すほうが扱いやすい。
 
 ```bash
 TOKEN=$(gcloud secrets versions access latest --secret=admin-token --project=wiki-prequiz)
@@ -372,9 +337,8 @@ curl -X POST \
 `{"added": 42, "skipped": 8, "seen": 50}` のように返る。
 `skipped` は題材にならなかったぶん（短すぎる、PV が少ない、取得に失敗）。
 
-**この操作は合言葉が要る。** Wikipedia と Gemini を記事数ぶん呼ぶので、
-公開エンドポイントのまま置くと、URL を知っているだけで課金させられる。
-`ADMIN_TOKEN` が未設定なら誰も通さない（503 を返す）。
+**この操作は合言葉が要る。** Wikipedia を記事数ぶん呼ぶので、公開のまま置けない。
+`ADMIN_TOKEN` が未設定なら誰も通さない（503）。
 
 貯めたあとは Firestore コンソールで `articles` を眺めて、
 出したくない記事の `enabled` を `false` にする。抽出はこのフラグを見ている
@@ -393,11 +357,9 @@ curl -X POST \
 
 ### CD はいま止めてある
 
-`cd.yml` の `on:` は **`workflow_dispatch` だけ**にしてあり、`main` に push しても動かない。
-デプロイ先がまだ無い状態で自動デプロイを繋ぐと、失敗通知が出続けるだけで何の役にも立たないため。
-
-有効にするには、`cd.yml` 冒頭の `push:` ブロックのコメントを外す。
-**その前に**下の3つを済ませておくこと。済んでいないと初回から失敗する。
+`cd.yml` の `on:` は **`workflow_dispatch` だけ**で、`main` に push しても動かない。
+有効にするには冒頭の `push:` ブロックのコメントを外す。
+**その前に**下の3つを済ませること。済んでいないと初回から失敗する。
 
 #### ① Workload Identity 連携（鍵ファイルなしで GCP に入る）
 
@@ -432,8 +394,7 @@ gcloud iam service-accounts add-iam-policy-binding \
   --member="principalSet://iam.googleapis.com/projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/github/attribute.repository/Syogo-Suganoya/wiki-prequiz"
 ```
 
-`attribute-condition` を必ず付ける。無いと**他人のリポジトリからも**このプールを
-使えてしまう。
+`attribute-condition` を必ず付ける。無いと**他人のリポジトリからも**このプールを使える。
 
 GUI でやるなら **IAMと管理 → Workload Identity 連携 → プールを作成**。
 プロバイダは OIDC、発行元は `https://token.actions.githubusercontent.com`、
@@ -460,10 +421,9 @@ GUI でやるなら **IAMと管理 → Workload Identity 連携 → プールを
 
 #### ③ 手で1回流して確かめる
 
-**Actions → CD → Run workflow** から手動実行する。
-`workflow_dispatch` を残してあるのはこのため。ここが通ってから `push:` を開ける。
+**Actions → CD → Run workflow** から手動実行する。ここが通ってから `push:` を開ける。
 
 ### パスフィルタ
 
 `web/**` を直しただけで Cloud Run を再デプロイしないよう、ジョブごとに
-`paths` で振り分けてある。デプロイ時間と、無意味なリビジョン増加を避けるため。
+`paths` で振り分けてある。

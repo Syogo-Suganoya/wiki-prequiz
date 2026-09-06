@@ -32,9 +32,7 @@ export function App() {
     setRoomId(id);
   };
 
-  // 部屋から出る。リロードはしないので、ニックネームや設定はそのまま残る。
-  // 落とすのは ?room= だけ。"/" と書くと、本番では LP のパスへ飛んでしまう
-  // （ゲームは /quiz に置いてある）
+  // 落とすのは ?room= だけ。"/" と書くと本番では LP へ飛ぶ（ゲームは /quiz）
   const leave = () => {
     history.replaceState(null, "", location.pathname);
     setRoomId(null);
@@ -135,9 +133,9 @@ function Home({ onEnter }: { onEnter: (id: string) => void }) {
   const [busy, setBusy] = useState(false);
   const [help, setHelp] = useState(false);
 
-  // 出演者の名前で始めたときだけ下りる幕。ゲームには関わらない演出
+  // 出演者の名前で始めたときだけ下りる幕
   const [egg, setEgg] = useState<Egg | null>(null);
-  // 幕が上がったあとに走らせる処理。state に関数を入れると更新関数と紛れるので ref
+  // 幕が上がったあとに走らせる処理。state に関数を入れると更新関数と紛れる
   const after = useRef<() => void>(() => {});
 
   const withEgg = (run: () => void) => {
@@ -286,23 +284,18 @@ function EggCurtain({ egg, onDone }: { egg: Egg; onDone: () => void }) {
     return () => clearTimeout(id);
   }, [onDone]);
 
-  // 絵は100桁を超える。画面幅から font-size を逆算する手もあるが、
-  // 1文字の実寸はフォントごとに違うので必ずずれる。実際に描かせて測る。
+  // 1文字の実寸はフォントごとに違うので、逆算せず実際に描かせて測る
   useLayoutEffect(() => {
     const el = artRef.current;
     if (!el) return;
     const fit = () => {
-      // 元絵は1文字＝正方形のドットとして写真から起こしてある。
-      // 行送りを文字幅と同じにしないと、顔が縦に伸びて別人になる
+      // 1文字＝正方形のドット。行送りを文字幅に合わせないと顔が縦に伸びる
       el.style.lineHeight = `${el.offsetWidth / egg.cols}px`;
-      // offsetWidth / offsetHeight は transform の影響を受けないので、
-      // 縮めたあとに測り直しても値が転がらない
       const fitted = Math.min(
         (window.innerWidth * 0.94) / el.offsetWidth,
         (window.innerHeight * 0.72) / el.offsetHeight,
       );
-      // 画面が測れない状況（描画が止まったタブなど）で 0 を掛けると
-      // 絵が消えたまま戻らない。測れなければ縮めない
+      // 測れない状況（描画が止まったタブ）で 0 を掛けると絵が消えたまま戻らない
       setScale(fitted > 0 ? fitted : 1);
     };
     fit();
@@ -401,10 +394,9 @@ function Matching({
       // 同じルールで募集中の部屋に入る。無ければ自分が募集側になる
       const { roomId } = await api.matchmake({ ...rules, username: name || "わたし" });
 
-      // 相手が入ってくるのを待つ。定員が埋まるか、待ち時間が尽きるまで
       const deadline = Date.now() + MATCH_WAIT_MS;
       while (alive && Date.now() < deadline) {
-        // 待っていることを知らせる。放置された部屋と区別してもらうため
+        // 待っていることを知らせる。放置された部屋と区別してもらう
         await api.heartbeat(roomId);
         const r = await api.getRoom(roomId);
         if (r.status !== "LOBBY") break; // 先に始まっていた
@@ -418,8 +410,7 @@ function Matching({
       if (!alive) return;
       setStep(2);
 
-      // 席が余っていれば埋めて開始する。開始は冪等なので、
-      // 同じ部屋の全員がここに来ても実際に始まるのは1回だけ
+      // 開始は冪等。全員がここに来ても実際に始まるのは1回だけ
       await api.fillBots(roomId);
       await api.start(roomId);
       await sleep(1200);
@@ -462,13 +453,11 @@ function Game({
   const solo = Object.keys(room.players).length === 1;
   const [quitting, setQuitting] = useState(false);
 
-  // 進行中に抜けるのは取り返しがつかないので一度聞く。
-  // ロビーと結果画面は押した意図がはっきりしているのでそのまま戻す
+  // 進行中だけ一度聞く。ロビーと結果画面は押した意図がはっきりしている
   const quit = () => (playing ? setQuitting(true) : onExit());
 
-  // 「先を越された」は出題画面ではなく、ここで持つ。
-  // 解答が成立した瞬間に開示へ切り替わるので、出題画面に置くと
-  // 返事が届くころには画面が消えていて、いちばん知りたい人に何も出せない
+  // 「先を越された」は開示画面で持つ。成立した瞬間に画面が切り替わるので、
+  // 出題画面に置くと返事が届くころには消えている
   const [nearMiss, setNearMiss] = useState<NearMiss | null>(null);
   const miss = nearMiss?.round === room.currentRound ? nearMiss : null;
 
@@ -564,8 +553,7 @@ function Lobby({ room }: { room: Room }) {
   );
 }
 
-// 「== あらすじ ==」「==== 3D版 ====」。Wikipedia の見出し記法で、
-// extracts API の explaintext は記号を落としてくれない
+// 「== あらすじ ==」。extracts API の explaintext は記号を落としてくれない
 const HEADING = /^[ \t]*(={2,6})[ \t]*(.+?)[ \t]*\1[ \t]*$/;
 
 /**
@@ -597,7 +585,7 @@ function ArticleBody({ text }: { text: string }) {
 /** 予習画面。ページ全体はスクロールせず、記事だけがスクロールする。 */
 function Study({ room }: { room: Room }) {
   const a = room.article!;
-  // 予習のスキップはモック構成でだけ出す。有無を決めるのはサーバー（API キーの有無）
+  // 予習のスキップはモック構成でだけ出す。決めるのはサーバー
   const { mock } = useConfig();
   return (
     <div className="study">
@@ -626,11 +614,9 @@ function Study({ room }: { room: Room }) {
   );
 }
 
-// 選択肢の見分け。色だけに頼らず形も変えるので、色の見分けがつかなくても選び違えない。
-// 数字はそのままキーボードの割り当てでもある
+// 色だけに頼らず形も変える。数字はそのままキーボードの割り当て
 const CHOICE_MARKS = [
-  // dy は数字の位置合わせ。三角は下半分に面積が寄るので、数字も下げないと
-  // 細い頂点側に重なって読めなくなる
+  // dy は数字の位置合わせ。三角は下半分に面積が寄るので数字も下げる
   { shape: "circle", color: "#E8352B", fg: "#fff", dy: 0 },
   { shape: "triangle", color: "#1E86D6", fg: "#fff", dy: 4 },
   { shape: "square", color: "#F5A623", fg: "#16161C", dy: 0 },
@@ -662,13 +648,12 @@ function Answer({
   const choose = async (c: string) => {
     const r = await api.answer(room.roomId, room.currentRound, c);
     if (r.accepted || r.reason !== "TAKEN" || r.behindMs === undefined) return;
-    // 解答できる時間より大きい差は、競り負けではなく「もう終わっていた」だけ。
-    // それを「21.98秒差で負けました」と出しても意味がないので黙っておく
+    // 解答時間より大きい差は競り負けではなく「もう終わっていた」だけ
     if (r.behindMs > (room.settings.durations.answerMs ?? 15000)) return;
     onMiss({ round: room.currentRound, behindMs: r.behindMs, winner: r.winnerName ?? "相手" });
   };
 
-  // 早押しは指の速さを競うので、タップより速いキーボードも受ける
+  // タップだけだと PC の人が構造的に不利になる
   useEffect(() => {
     if (taken) return;
     const onKey = (e: KeyboardEvent) => {
@@ -682,8 +667,7 @@ function Answer({
     return () => window.removeEventListener("keydown", onKey);
   });
 
-  // 押したあとの一言と、押す前の一言。ひとりのときに「早い者勝ち」と言われても、
-  // competing 相手がいないので意味が通らない
+  // ひとりのときに「早い者勝ち」と言われても意味が通らない
   const hint = taken
     ? solo ? "解答しました" : "解答が入りました"
     : solo ? "答えられるのは1回だけ。選んだら確定です" : "早い者勝ち。最初に選んだ人の解答で決まります";
@@ -779,8 +763,8 @@ function Result({ room, solo, onExit }: { room: Room; solo: boolean; onExit: () 
     <div className="pad center">
       <h2 className="result-title">最終結果</h2>
       {solo ? (
-        // ひとりで「1位」を出しても意味がないので、順位表ではなく得点を見せる。
-        // 正解数はサーバーが持っていない（得点からは誤答の分だけずれる）ので出さない
+        // ひとりで「1位」は意味がないので、順位表ではなく得点。
+        // 正解数はサーバーが持っていないので出さない
         <div className="solo-score">
           <p className="note">{room.settings.totalRounds}問おわり</p>
           <p className={`delta ${soloTone}`}>

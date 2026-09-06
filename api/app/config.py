@@ -15,15 +15,11 @@ class Settings(BaseSettings):
     firestore_emulator_host: str | None = None
     firebase_auth_emulator_host: str | None = None
 
-    # **作問（Gemini）をモックにするかどうか。これだけが判断材料。**
-    # 記事は切り替えの対象外で、いつも Wikipedia から取る。
+    # 作問（Gemini）をモックにするか。記事は対象外で、いつも Wikipedia から取る。
     #
-    # キーの有無から推測すると「キーは検証用に置いてあるが実際は呼びたくない」
-    # といった意図が表現できず、逆に「本番のつもりがキー未設定で黙ってモック」
-    # という事故も起こる。切り替えたい意図は、変数として明示的に書く。
-    #
-    # 既定は True。うっかり実 API を叩いて課金される事故のほうが痛いので、
-    # 実際に作問させるときだけ明示的に false にする。
+    # キーの有無から推測しないのは、「キーは置いてあるが呼びたくない」が表現できず、
+    # 逆に「本番のつもりがキー未設定で黙ってモック」も起こるため。
+    # 既定 True。うっかり実 API を叩いて課金される事故のほうが痛い。
     use_mock: bool = True
 
     gemini_api_key: str = ""
@@ -35,10 +31,8 @@ class Settings(BaseSettings):
 
     cors_origins: str = "http://localhost:5173"
 
-    # 記事プールの構築など、運用者だけが叩く操作の合言葉。
-    # 未設定なら、その操作は誰にも通さない（開けっ放しにしない）。
-    # プール構築は Wikipedia と Gemini を何十回も呼ぶので、
-    # 無防備なまま置くと URL を知っているだけで課金させられる。
+    # 運用者だけが叩く操作（記事プールの構築）の合言葉。
+    # 未設定なら誰にも通さない。無防備だと URL を知っているだけで叩けてしまう。
     admin_token: str = ""
 
     @property
@@ -57,8 +51,7 @@ class Settings(BaseSettings):
     def missing_settings(self) -> list[str]:
         """いまの構成で足りていない設定。
 
-        記事はモックでも実データなので、`WIKIMEDIA_USER_AGENT` は常に要る。
-        `GEMINI_API_KEY` が要るのは、実際に作問させるときだけ。
+        記事はモックでも実データなので UA は常に要る。キーは作問させるときだけ。
         """
         missing = []
         if not self.wikimedia_user_agent.strip():

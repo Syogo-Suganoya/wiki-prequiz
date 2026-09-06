@@ -35,9 +35,8 @@ export function useConfig(): AppConfig {
 /**
  * ルーム状態の購読と、フェーズ進行の駆動。
  *
- * 本来は Firestore の onSnapshot で購読するが、モック段階では
- * ポーリングで代用している。フェーズ進行の考え方（締切を過ぎたクライアントが
- * advance を叩き、サーバーが冪等に捌く）は設計どおり。
+ * 本来は Firestore の onSnapshot だが、いまはポーリングで代用している。
+ * 締切を過ぎたクライアントが advance を叩き、サーバーが冪等に捌く。
  */
 export function useGame(roomId: string | null) {
   const [room, setRoom] = useState<Room | null>(null);
@@ -89,9 +88,7 @@ export function useGame(roomId: string | null) {
       const now = serverNow();
       const ends = r.phaseEndsAt ? Date.parse(r.phaseEndsAt) : null;
 
-      // 予習のあいだに問題を作らせる。担当はサーバーが1人に絞るので、
-      // 全員が叩いても生成は1回だけ。ここで作っておかないと、
-      // 予習が終わってから数十秒待たされる
+      // 予習のあいだに作らせる。ここで作らないと予習後に数十秒待たされる
       if (r.status === "STUDYING" && !r.quizReady && !prepared.current) {
         prepared.current = true;
         try {

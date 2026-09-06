@@ -1,16 +1,9 @@
 """出題する記事と問題を用意する。
 
-**記事はいつも実データ**（Wikipedia）。プールから選び、キャッシュを見て、
-無ければ取りに行く。ゲーム中に Wikipedia を叩くのは、キャッシュが切れて
-いたときだけ。ここに LLM は要らない。
-
-`USE_MOCK` が切り替えるのは**作問（AI）だけ**。true なら Gemini を呼ばず、
-手で書いた問題（[`mock_data`](mock_data.py)）を出す。手元で遊びながら直すのに、
-記事まで偽物にする必要はないし、毎回課金されるのも困る、という切り分け。
-
-ただしモックのときは、**記事を選ぶ範囲が問題のあるタイトルに狭まる**。
-記事は本物のまま（Wikipedia から取る）だが、どれでもよいわけではなくなる。
-予習した記事の問題が出ないと、ゲームとして成立しないため。
+**記事はいつも実データ**（Wikipedia）。`USE_MOCK` が切り替えるのは作問だけで、
+true なら Gemini の代わりに手で書いた問題（`mock_data`）を出す。
+そのときは**記事を選ぶ範囲が、問題のあるタイトルに狭まる**。
+予習した記事の問題が出ないとゲームとして成立しないため。
 """
 
 from __future__ import annotations
@@ -36,9 +29,8 @@ class NoArticleError(RuntimeError):
 def error_message(exc: Exception) -> str:
     """作問の失敗を、画面に出す一文にする。
 
-    通すのは**遊ぶ人向けに書いた文言だけ**。それ以外は伏せて定型文にする。
-    想定外の例外メッセージには、記事タイトルや内部の事情が混ざりうるので、
-    そのまま画面へ流さない。
+    通すのは**遊ぶ人向けに書いた文言だけ**。想定外の例外メッセージには
+    内部の事情が混ざりうるので、伏せて定型文にする。
     """
     if isinstance(exc, gemini.GeminiError):
         return str(exc)
@@ -48,11 +40,8 @@ def error_message(exc: Exception) -> str:
 def pick_article() -> Article:
     """記事を1本選ぶ。**問題はまだ作らない。**
 
-    作問は予習の60秒のあいだに回す。ここで一緒に作ると、ゲーム開始を
-    押した人だけが数十秒待たされ、その間ほかの参加者は何も見えない。
-
-    記事はどちらでも本物を読ませる。モックのときだけ、**手で問題を書いた
-    タイトルの中から**選ぶ（本文はいつも通り Wikipedia から取る）。
+    作問は予習の60秒のあいだに回す。ここで一緒に作ると、開始を押した人だけが
+    数十秒待たされ、その間ほかの参加者には何も見えない。
     """
     if get_settings().use_mock:
         return _pick_real_article(list(mock_data.MOCK_QUESTIONS))
@@ -60,22 +49,17 @@ def pick_article() -> Article:
 
 
 def make_questions(title: str, extract: str, count: int) -> list[Question]:
-    """記事から問題をつくる。予習の裏で走らせる想定。
-
-    呼び出し側は記事の実体を持たなくてよい（タイトルと本文だけで足りる）。
-    """
+    """記事から問題をつくる。予習の裏で走らせる想定。"""
     if get_settings().use_mock:
         return _mock_questions(title, count)
     return gemini.make_questions(title, extract, count)
 
 
 def _mock_questions(title: str, count: int) -> list[Question]:
-    """Gemini を呼ばずに、その記事のために書いておいた問題を返す。
+    """その記事のために書いておいた問題を返す。
 
-    `pick_article` が問題のあるタイトルからしか選ばないので、普通は当たる。
-    当たらないのは、モックに切り替える前に始まったゲームが残っている場合や、
-    問題を消してタイトルだけ残った場合。どちらも設定の間違いなので、
-    それと分かる文言で落とす。
+    `pick_article` が問題のあるタイトルからしか選ばないので普通は当たる。
+    外れるのは設定の間違い（切り替え前のゲームが残っている等）なので、そう分かる文言で落とす。
     """
     pool = mock_data.MOCK_QUESTIONS.get(title)
     if not pool:
@@ -113,8 +97,7 @@ def _to_article(
 ) -> Article:
     """最大数値は保存せず、本文から毎回その場で出す。
 
-    正規表現なので一瞬で終わる。保存すると、本文を取り直したときに
-    数値だけ古いまま残る道ができてしまう。導出できるものは持たない。
+    保存すると、本文を取り直したときに数値だけ古いまま残る道ができる。
     """
     value, context = maxnumber.extract(extract)
     return Article(
@@ -144,12 +127,7 @@ def _store(article: Article) -> None:
 
 
 def _refresh(title: str) -> Article:
-    """Wikipedia から取り直してキャッシュへ入れる。**Gemini は呼ばない。**
-
-    記事を集めるのに LLM は要らない。本文も PV も被リンクも Wikimedia が返し、
-    最大数値は本文から正規表現で出せる（[`maxnumber`](maxnumber.py)）。
-    LLM を使うのは作問だけ。
-    """
+    """Wikipedia から取り直してキャッシュへ入れる。**Gemini は呼ばない。**"""
     raw = asyncio.run(wikipedia.fetch_article(title))
     # 先に切り詰めてから判定する。長さの基準は「予習で読む本文」に対するもの
     text = wikipedia.trim_for_study(raw.extract)
@@ -176,10 +154,8 @@ def _pick_real_article(only: list[str] | None = None) -> Article:
     """プールから1本選ぶ。無ければ取りに行く。
 
     `only` を渡すと、その中からしか選ばない（モックでの使い方）。
-    プールに無いタイトルでも、Wikipedia から取ってくるので選べる。
-
-    `only` が無いときは、プールが空ならその場で人気記事から作る。
-    初回起動でも遊べるようにするため。
+    プールに無いタイトルでも Wikipedia から取ってくるので選べる。
+    `only` が無くてプールも空なら、その場で人気記事から作る（初回起動でも遊べるように）。
     """
     pool = _candidates()
     by_title = {str(d.get("title")): d for d in pool}
@@ -213,8 +189,7 @@ def _pick_real_article(only: list[str] | None = None) -> Article:
 def build_pool(limit: int = 50) -> dict[str, Any]:
     """人気記事から題材になるものを選んでプールへ貯める。
 
-    ゲーム中ではなく、定期実行から呼ぶことを想定している
-    （ゲーム開始時に何十本も取りに行くとレイテンシが跳ねるため）。
+    ゲーム中には呼ばない。開始時に何十本も取りに行くとレイテンシが跳ねる。
     """
     titles = asyncio.run(wikipedia.fetch_popular_titles(limit=limit))
     added, skipped = 0, 0

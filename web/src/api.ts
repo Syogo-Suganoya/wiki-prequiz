@@ -54,7 +54,7 @@ export type Room = {
   players: Record<string, PlayerState>;
 };
 
-// モック段階では Firebase 匿名認証の代わりに、ブラウザごとの ID を localStorage に持つ
+// Firebase 匿名認証の代わりに、ブラウザごとの ID を localStorage に持つ
 export function playerId(): string {
   const KEY = "prequiz.playerId";
   let id = localStorage.getItem(KEY);
@@ -65,14 +65,9 @@ export function playerId(): string {
   return id;
 }
 
-// API の置き場所。
-//
-// 未設定なら空文字＝同一オリジンで、開発中は Vite が /api を api コンテナへ
-// 流してくれる（vite.config.ts の proxy）。本番は Vercel と Cloud Run で
-// オリジンが分かれるので、ここに Cloud Run の URL を入れて直接叩く。
-//
-// Vercel の rewrite で中継する手もあるが、このゲームは 400ms ごとに
-// ポーリングして早押しをミリ秒で測る。一段挟むぶんの遅延を持ち込みたくない。
+// API の置き場所。未設定なら同一オリジン（開発中は Vite の proxy が api へ流す）。
+// 本番は Vercel と Cloud Run でオリジンが分かれるので Cloud Run の URL を入れる。
+// Vercel の rewrite で中継しないのは、400ms ポーリングで早押しをミリ秒で測るため。
 const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
 
 async function call<T>(path: string, body?: unknown): Promise<T> {

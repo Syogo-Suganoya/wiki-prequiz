@@ -1,9 +1,7 @@
 """FastAPI アプリケーションのエントリポイント。
 
-ローカルでは uvicorn（Docker）で、本番では Cloud Run で同じイメージを動かす。
-
-モック段階のため認証は簡略化し、`X-Player-Id` ヘッダをそのまま uid として扱う。
-本番では Firebase Authentication の ID トークン検証に差し替える。
+**認証は暫定。** `X-Player-Id` ヘッダをそのまま uid として扱う。
+Firebase Authentication の ID トークン検証への差し替えは未実装。
 """
 
 import secrets
@@ -44,10 +42,7 @@ def require_admin(x_admin_token: str | None) -> None:
     """運用者だけが叩ける操作の入口。
 
     Cloud Run は全体を公開しないと遊べないので、IAM では個別の口を守れない。
-    合言葉を1つ持たせて、それを知っている人だけ通す。
-
-    **未設定なら誰も通さない。** 「設定を忘れたら素通し」だと、
-    忘れたことに気づく機会がないまま開けっ放しになる。
+    **未設定なら誰も通さない。** 素通しだと、忘れたことに気づく機会がない。
     """
     expected = get_settings().admin_token
     if not expected:
@@ -95,8 +90,7 @@ def health() -> dict[str, Any]:
 def client_config() -> dict[str, Any]:
     """クライアントが起動時に読む設定。
 
-    モックかどうかは URL のパラメータではなくサーバーが決める（`USE_MOCK`）。
-    モックのときだけ予習スキップなどの開発用操作が開く。
+    モックかどうかはサーバーが決める（`USE_MOCK`）。クライアントが自称できてはいけない。
     """
     return {
         "mock": settings.is_mock,
@@ -192,11 +186,7 @@ def fill_bots(room_id: str) -> dict[str, int]:
 
 @app.post("/api/rooms/{room_id}/start")
 def start(room_id: str) -> dict[str, bool]:
-    """記事を1本用意して予習フェーズへ。
-
-    実データのときはここで Wikipedia と Gemini を呼ぶ。用意できなければ
-    502 を返す。黙って空のゲームを始めるよりも、理由が見えるほうがよい。
-    """
+    """記事を1本用意して予習フェーズへ。作問はまだ（`prepare-questions`）。"""
     try:
         game.start_game(room_id)
     except content.NoArticleError as exc:
@@ -211,25 +201,16 @@ def build_pool(
 ) -> dict[str, Any]:
     """記事プールを貯める。**運用者が手で叩く。**
 
-    定期実行は置いていない。人気記事の顔ぶれは日単位でしか動かないうえ、
-    プールには人の目で選別を入れたい（Wikimedia の人気一覧は
-    出題に向かない記事も返す）ので、勝手に増えていくほうが困る。
-
-    ゲーム開始時に何十本も取りに行くとレイテンシが跳ねるため、
-    普段はここで貯めたものを使う。
+    定期実行は置いていない。出題に向かない記事も返るので、人の目で選別を入れたい。
+    `USE_MOCK` では分岐しない（記事の取得に AI は関わらない）。
     """
-    # USE_MOCK では分岐しない。記事の取得に AI は関わらないので、
-    # モック構成でもプールは本物を貯める
     require_admin(x_admin_token)
     return content.build_pool(limit=limit)
 
 
 @app.post("/api/rooms/{room_id}/prepare-questions")
 def prepare_questions(room_id: str) -> dict[str, Any]:
-    """予習のあいだに問題を作る。クライアントが予習開始直後に叩く。
-
-    担当はサーバーが1つだけに絞るので、全員が叩いても生成は1回。
-    """
+    """予習のあいだに問題を作る。担当は1つに絞るので、全員が叩いても生成は1回。"""
     try:
         return game.prepare_questions(room_id)
     except Exception as exc:
@@ -261,10 +242,7 @@ def answer(
     body: AnswerRequest,
     x_player_id: str | None = Header(default=None),
 ) -> dict[str, Any]:
-    """解答。最初に選んだ1人だけが成立する（サーバーのトランザクションで確定）。
-
-    負けた場合は `behindMs`（何ミリ秒差だったか）と相手の名前を返す。
-    """
+    """解答。最初の1人だけが成立する。負けた側には `behindMs` と相手の名前を返す。"""
     player_id = require_player(x_player_id)
     return game.answer(room_id, player_id, body.round, body.answer)
 
@@ -305,8 +283,7 @@ def heartbeat(room_id: str, x_player_id: str | None = Header(default=None)) -> d
 def get_room(room_id: str) -> dict[str, Any]:
     """公開状態の取得。
 
-    本来はクライアントが Firestore を直接購読するが、モックでは
-    ポーリングで代用して動作確認を優先する。
+    本来はクライアントが Firestore を直接購読するが、いまはポーリングで代用している。
     返すのは公開領域のみで、正解は `REVEALING` 以降しか入っていない。
     """
     snap = get_db().collection("rooms").document(room_id).get()
