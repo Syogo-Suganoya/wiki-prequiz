@@ -1,0 +1,34 @@
+{
+  "indexes": [
+    {
+      "//": "ランダムマッチ: 待機中のエントリを古い順に取り出す",
+      "collectionGroup": "matchQueue",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "playerCount", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "//": "記事プール: 有効な記事から本文長で絞ってランダム抽出する",
+      "collectionGroup": "articles",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "enabled", "order": "ASCENDING" },
+        { "fieldPath": "charCount", "order": "ASCENDING" },
+        { "fieldPath": "randomKey", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "//": "放置ルームの掃除バッチ用",
+      "collectionGroup": "rooms",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

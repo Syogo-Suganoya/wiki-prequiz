@@ -1,0 +1,43 @@
+rules_version = '2';
+
+// 設計方針: クライアントからの書き込みは一切許可しない。
+// スコア・フェーズ遷移・回答の記録はすべて FastAPI 側の Admin SDK が行う
+// （Admin SDK はこのルールをバイパスする）。
+// これによりスコア改竄と正解の先読みを構造的に不可能にする。
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /rooms/{roomId} {
+      // 参加者だけがルームの公開状態を購読できる
+      allow read: if request.auth != null
+                  && request.auth.uid in resource.data.players;
+      allow write: if false;
+
+      // 正解・解説・全ラウンド分の問題セット。
+      // クライアントからは read すら不可（ここが正解秘匿の要）。
+      match /private/{document=**} {
+        allow read, write: if false;
+      }
+
+      // 自分が送信した回答だけ読み返せる。他人の回答は締切後に
+      // サーバーが rooms/{roomId} へコピーするまで見えない。
+      match /answers/{playerId} {
+        allow read: if request.auth != null && request.auth.uid == playerId;
+        allow write: if false;
+      }
+    }
+
+    // 記事プールとマッチング待機列はサーバー専用
+    match /articles/{articleId} {
+      allow read, write: if false;
+    }
+    match /matchQueue/{entryId} {
+      allow read, write: if false;
+    }
+
+    // 上記以外は明示的に拒否
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

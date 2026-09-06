@@ -1,0 +1,514 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>1分間予習クイズ</title>
+<meta name="description" content="Wikipediaの記事を1分だけ予習して、あとは早押しクイズ。ヤマを張って、詰め込んで、誰よりも早く答えるだけ。">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="icon" href="favicon-96.png" sizes="96x96" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="theme-color" content="#1E86D6">
+
+<meta property="og:title" content="1分間予習クイズ">
+<meta property="og:description" content="1分だけ予習してクイズに答えろ！！">
+<meta property="og:type" content="website">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Zen+Maru+Gothic:wght@500;700;900&display=swap" rel="stylesheet">
+
+<style>
+:root{
+  /* 元動画のスタジオ（青い背景幕）と、白抜き＋紫フチのテロップを土台にした配色 */
+  --curtain:#1E86D6;
+  --curtain-dark:#1263A8;
+  --stroke:#14161F;      /* テロップの縁取りは黒系 */
+  --ink:#16161C;
+  --paper:#F7F4EC;
+  --white:#FFFFFF;
+  --yellow:#FFD21E;
+  --red:#E8352B;         /* 注意喚起・早押しボタン用。人には割り当てない */
+
+  /* プレイヤーの識別色。元動画で出演者ごとに色が決まっているのに倣う */
+  --p1:#FF7A1A;
+  --p2:#25B75C;
+  --p3:#1E86D6;
+  --p4:#2ED0E8;
+
+  /* Dela Gothic One は極太なので大きい見出し専用。
+     小さい文字に使うと漢字の内側が潰れるため --pop-sm を使う */
+  --pop:"Dela Gothic One",sans-serif;
+  --pop-sm:"Zen Maru Gothic",system-ui,sans-serif;
+  --body:"Zen Maru Gothic",system-ui,sans-serif;
+
+  --line:3px solid var(--ink);
+  --drop:6px 6px 0 var(--ink);
+  --drop-sm:4px 4px 0 var(--ink);
+
+  --shell:min(1080px,100% - 2.5rem);
+}
+
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;background:var(--paper);color:var(--ink);
+  font-family:var(--body);font-weight:500;font-size:16px;line-height:1.9;
+}
+img,svg{max-width:100%}
+.shell{width:var(--shell);margin-inline:auto}
+
+/* 動画のテロップ処理: 白抜き文字を太く縁取り、影を落とす。
+   縁取りの色は「誰が話しているか」を表すものなので、
+   話者のいない見出しでは黒に固定する（色はプレイヤーの識別にだけ使う）。 */
+.telop{
+  display:block;
+  color:var(--white);
+  paint-order:stroke fill;
+  -webkit-text-stroke:4px var(--stroke);
+  filter:drop-shadow(3px 3px 0 rgba(0,0,0,.28));
+}
+/* 強調したい語だけ黄色に塗る（サムネイルの見出しと同じ処理） */
+.telop em{color:var(--yellow);font-style:normal}
+
+/* 出演者の名前プレート。色ベタに白文字 */
+.plate{
+  display:inline-block;font-family:var(--pop-sm);font-weight:900;color:var(--white);
+  padding:.24rem .8rem;font-size:.85rem;line-height:1.5;
+  background:var(--p1);
+}
+.plate.p2{background:var(--p2)}
+.plate.p3{background:var(--p3)}
+.plate.p4{background:var(--p4);color:var(--ink)}
+.plate.r{background:var(--red)}
+
+/* 蛍光ペン＝ヤマを張る手つき */
+/* ヒーローは青地なので、蛍光ペンではなく白帯＋黒文字で抜く */
+.marker{background:var(--yellow);color:var(--ink);padding:.05em .35em;border-radius:4px;
+        font-weight:900;white-space:nowrap}
+
+/* ── ヘッダ ─────────────────────────── */
+.masthead{background:var(--ink);border-bottom:4px solid var(--yellow)}
+.masthead .shell{display:flex;align-items:center;height:58px}
+.wordmark{display:flex;align-items:center;gap:.55rem;font-family:var(--pop-sm);font-weight:900;font-size:1rem;color:var(--white)}
+.wordmark svg{width:28px;height:28px;border-radius:8px;display:block}
+
+/* ── ヒーロー（スタジオの青幕）──────── */
+.hero{
+  position:relative;overflow:hidden;
+  background:
+    radial-gradient(120% 90% at 50% 8%, #57ACEA 0%, var(--curtain) 45%, var(--curtain-dark) 100%);
+  border-bottom:var(--line);
+  padding:clamp(2.2rem,5vw,3.6rem) 0 clamp(3rem,7vw,4.5rem);
+}
+.hero .shell{position:relative;display:grid;grid-template-columns:1fr 1fr;
+  gap:clamp(1.6rem,4vw,3rem);align-items:center}
+
+.banner{
+  display:inline-block;background:var(--red);color:var(--white);
+  font-family:var(--pop-sm);font-weight:900;font-size:.92rem;
+  padding:.45rem 1.1rem;border:var(--line);
+  box-shadow:var(--drop-sm);transform:rotate(-2deg);margin-bottom:1.4rem;
+}
+.hero h1{
+  font-family:var(--pop);
+  font-size:clamp(2rem,5.4vw,3.4rem);
+  line-height:1.3;margin:0 0 1.4rem;letter-spacing:-.01em;
+}
+.hero p.lead{
+  margin:0 0 1.9rem;max-width:25em;color:var(--white);font-weight:700;
+  text-shadow:0 2px 6px rgba(0,0,0,.35);
+}
+.hero p.lead .marker{text-shadow:none}
+
+.play{
+  display:inline-flex;align-items:center;gap:.55rem;
+  background:var(--yellow);color:var(--ink);
+  font-family:var(--pop-sm);font-weight:900;font-size:1.25rem;
+  padding:1rem 2.3rem;border:var(--line);border-radius:999px;
+  text-decoration:none;box-shadow:var(--drop);
+  transition:transform .1s ease,box-shadow .1s ease;
+}
+.play:hover{transform:translate(2px,2px);box-shadow:var(--drop-sm)}
+.play:active{transform:translate(6px,6px);box-shadow:0 0 0 var(--ink)}
+
+/* ── シグネチャ: 1分予習のデモ ───────── */
+.demo{background:var(--white);border:var(--line);box-shadow:var(--drop);overflow:hidden}
+.demo-bar{
+  display:flex;align-items:center;justify-content:space-between;gap:1rem;
+  background:var(--ink);color:var(--white);padding:.5rem 1rem;
+}
+.demo-bar .plate{font-size:.78rem}
+/* 残り時間はアプリと同じアナログ時計の針で見せる。針は中心を軸に1周する */
+.demo-clock{width:30px;height:30px;display:block;flex:none}
+.demo-clock .face{fill:none;stroke:rgba(255,255,255,.35);stroke-width:2}
+.demo-clock .needle{stroke:var(--yellow);stroke-width:2.6;stroke-linecap:round;
+                    transform-box:view-box;transform-origin:20px 20px}
+.demo-clock.is-low .needle{stroke:var(--red)}
+.demo-clock.is-low .face{stroke:var(--red);opacity:.8}
+
+/* 予習と出題を重ねて切り替えるので、高さは4択が収まるほうに合わせる */
+.demo-body{padding:1.2rem 1.2rem 1.4rem;min-height:330px;position:relative}
+.demo-title{font-family:var(--pop-sm);font-weight:900;font-size:1.3rem;margin:0 0 .6rem}
+.demo-text{margin:0;font-size:.9rem;line-height:2.05}
+
+.hl{
+  background-image:linear-gradient(transparent 58%, var(--yellow) 58%);
+  background-repeat:no-repeat;background-size:0% 100%;
+  transition:background-size .45s ease;padding:0 .1em;
+}
+.hl.on{background-size:100% 100%}
+
+/* 黄色はアクセント色なので、面で使うと目が散る。
+   実際の出題画面と同じく、白地に問題文と4択を出す。 */
+.demo-quiz{
+  position:absolute;inset:0;background:var(--white);
+  padding:1.2rem;display:flex;flex-direction:column;justify-content:center;
+  opacity:0;visibility:hidden;transition:opacity .2s ease;
+}
+.demo-quiz.on{opacity:1;visibility:visible}
+.demo-q-tag{font-family:var(--pop-sm);font-weight:900;color:var(--red);font-size:.95rem;margin:0 0 .5rem}
+.demo-q{
+  font-family:var(--pop-sm);font-weight:900;font-size:1.25rem;line-height:1.5;margin:0 0 .9rem;
+  color:var(--ink);
+}
+/* デモは見るだけ。押せると誤解されるので、選択肢はボタンにしない */
+.demo-choices{list-style:none;padding:0;margin:0;display:grid;gap:.45rem}
+.demo-choices li{
+  border:2px solid var(--ink);border-radius:10px;padding:.5rem .8rem;
+  font-family:var(--pop-sm);font-weight:900;font-size:.95rem;line-height:1.5;
+  box-shadow:2px 2px 0 var(--ink);background:var(--white);
+}
+
+/* ── 帯共通 ─────────────────────────── */
+.band{padding:clamp(2.8rem,6vw,4.2rem) 0;border-bottom:var(--line)}
+.band h2{font-family:var(--pop);font-size:clamp(1.5rem,3.8vw,2.2rem);
+  line-height:1.4;margin:0 0 .6rem;text-align:center}
+.band .sub{text-align:center;margin:0 auto 2.4rem;max-width:33em;font-size:.94rem}
+/* サブ文を置かない帯では、見出しの下に余白を作る */
+.band h2:last-of-type{margin-bottom:2.2rem}
+
+/* ── 面白さ4つ ──────────────────────── */
+.why{background:var(--paper)}
+.why-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:1.3rem}
+.why-card{background:var(--white);border:var(--line);padding:1.4rem 1.3rem;box-shadow:var(--drop-sm)}
+.why-head{display:flex;align-items:center;gap:.9rem;margin-bottom:.5rem}
+.why-ill{display:block;width:84px;height:84px;margin:.2rem 0 .7rem}
+.why-card h3{font-family:var(--pop-sm);font-weight:900;font-size:1.15rem;margin:0 0 .45rem}
+.why-card p{margin:0;font-size:.91rem}
+
+/* ── 遊びかた ───────────────────────── */
+.how{background:var(--curtain);color:var(--white)}
+.how h2{color:var(--white);-webkit-text-stroke:3px var(--stroke);paint-order:stroke fill}
+.how .sub{color:var(--white);font-weight:700;text-shadow:0 1px 5px rgba(0,0,0,.35)}
+.how-grid{display:grid;grid-template-columns:1fr;gap:1.6rem;max-width:44em;margin-inline:auto}
+.how-step{background:var(--white);color:var(--ink);border:var(--line);
+  padding:1.5rem 1.2rem 1.3rem;box-shadow:var(--drop-sm);position:relative}
+.how-num{
+  position:absolute;top:-17px;left:-13px;width:46px;height:46px;border-radius:50%;
+  background:var(--yellow);border:var(--line);font-family:var(--pop);font-size:1.15rem;
+  display:grid;place-items:center;box-shadow:var(--drop-sm);
+}
+.how-time{font-family:var(--pop-sm);font-weight:900;font-size:1.5rem;margin:.3rem 0 .25rem;color:var(--red)}
+.how-step h3{font-family:var(--pop-sm);font-weight:900;font-size:1.08rem;margin:0 0 .45rem}
+.how-step p{margin:0;font-size:.89rem}
+/* 実画面の写し。文章の脇に置いて、何が起きるかを直接見せる */
+.how-step{display:grid;grid-template-columns:1fr 260px;gap:1.4rem;align-items:center}
+.how-step .txt{min-width:0}
+.shot{border:2px solid var(--ink);border-radius:10px;display:block;
+      width:100%;height:auto;box-shadow:3px 3px 0 var(--ink);background:#fff}
+@media (max-width:640px){
+  .how-step{grid-template-columns:1fr}
+  .how-step .shot{max-width:320px;margin-inline:auto}
+}
+
+/* ── ゲームモード（補足）────────────── */
+.modes{background:var(--paper)}
+.modes h2{font-size:clamp(1.25rem,3vw,1.6rem)}
+.mode-row{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem}
+.mode-item{border:var(--line);padding:1rem 1.1rem 1.1rem;background:var(--white)}
+.mode-item p{margin:.5rem 0 0;font-size:.86rem}
+.mode-item b{color:var(--red)}
+
+/* ── フッタ ─────────────────────────── */
+.foot{background:var(--ink);color:#EDE9DE;padding:2.6rem 0 3.2rem;font-size:.9rem}
+.foot h2{font-family:var(--pop-sm);font-weight:900;font-size:1rem;margin:0 0 1rem;color:var(--yellow)}
+.foot ul{list-style:none;padding:0;margin:0 0 1.5rem}
+.foot li{margin-bottom:.6rem;line-height:1.7}
+.foot a{color:var(--yellow)}
+.foot .fine{opacity:.6;margin:0;font-size:.8rem}
+
+/* ── レスポンシブ ───────────────────── */
+@media (max-width:880px){
+  .hero .shell{grid-template-columns:1fr}
+  .mode-row{grid-template-columns:1fr}
+  .how-num{left:-9px}
+}
+@media (max-width:560px){
+  .why-grid{grid-template-columns:1fr}
+  .telop{-webkit-text-stroke-width:3px}
+  .how h2{-webkit-text-stroke-width:2px}
+}
+
+:where(a,button):focus-visible{outline:4px solid var(--yellow);outline-offset:3px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <div class="shell">
+    <span class="wordmark">
+      <svg viewBox="0 0 64 64" aria-hidden="true">
+        <rect width="64" height="64" rx="14" fill="#FFD21E"/>
+        <circle cx="32" cy="32" r="23" fill="none" stroke="#16161C" stroke-opacity=".22" stroke-width="5"/>
+        <circle cx="32" cy="32" r="23" fill="none" stroke="#16161C" stroke-width="5"
+                stroke-linecap="round" stroke-dasharray="108 37" transform="rotate(-90 32 32)"/>
+        <path d="M26.5 26.5 L34 19.5 L39.5 19.5 L39.5 45 L33.5 45 L33.5 27.5 L29.5 30.5 Z" fill="#16161C"/>
+      </svg>
+      1分間予習クイズ
+    </span>
+  </div>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="shell">
+      <div>
+        <span class="banner">1分だけ予習してクイズに答えろ！！</span>
+        <h1><span class="telop">Wikipediaを<em>1分</em>。<br>あとは<em>早押し</em>。</span></h1>
+        <p class="lead">
+          どこが問われるかは誰も教えてくれません。
+          <span class="marker">ヤマを張って</span>、必死に覚えて、あとは誰よりも早く答えるだけ。
+        </p>
+        <!-- 開発中はローカルのアプリへ。公開時は本番URLに差し替える -->
+        <a class="play" href="http://localhost:5173/">▶ 遊んでみる</a>
+      </div>
+
+      <!-- シグネチャ: 1分の予習が実際に流れて、時間切れで問題が出る -->
+      <div class="demo" aria-hidden="true">
+        <div class="demo-bar">
+          <span class="plate p3">Wikipedia1分クイズ</span>
+          <svg class="demo-clock" id="clock" viewBox="0 0 40 40">
+            <circle class="face" cx="20" cy="20" r="17"/>
+            <line class="needle" id="needle" x1="20" y1="20" x2="20" y2="7"/>
+          </svg>
+        </div>
+        <div class="demo-body">
+          <p class="demo-title">富士山</p>
+          <p class="demo-text">
+            富士山は、<span class="hl" data-at="52">静岡県と山梨県にまたがる</span>活火山である。
+            標高<span class="hl" data-at="38">3776メートル</span>で日本最高峰。
+            古くから信仰の対象とされ、<span class="hl" data-at="22">2013年に世界文化遺産</span>へ登録された。
+            最後の噴火は<span class="hl" data-at="10">1707年の宝永大噴火</span>とされる。
+          </p>
+
+          <div class="demo-quiz" id="quiz">
+            <p class="demo-q-tag">第1問</p>
+            <p class="demo-q">最後に噴火したのは西暦何年？</p>
+            <ul class="demo-choices">
+              <li>1707年</li>
+              <li>1783年</li>
+              <li>1854年</li>
+              <li>1923年</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="band why">
+    <div class="shell">
+      <h2>なにが面白いの？</h2>
+      <div class="why-grid">
+        <article class="why-card">
+          <!-- 記事に蛍光ペンでヤマを張る -->
+          <svg class="why-ill" viewBox="0 0 96 96" aria-hidden="true">
+            <rect x="14" y="9" width="52" height="72" rx="4" fill="#fff" stroke="#16161C" stroke-width="3"/>
+            <rect x="22" y="21" width="36" height="7" fill="#FFD21E"/>
+            <rect x="22" y="34" width="26" height="4" fill="#D9D6CE"/>
+            <rect x="22" y="45" width="36" height="7" fill="#FFD21E"/>
+            <rect x="22" y="58" width="30" height="4" fill="#D9D6CE"/>
+            <rect x="22" y="68" width="18" height="4" fill="#D9D6CE"/>
+            <g transform="rotate(28 72 58)">
+              <rect x="63" y="30" width="17" height="28" rx="3" fill="#FF7A1A" stroke="#16161C" stroke-width="3"/>
+              <path d="M63 58 h17 l-8.5 12 z" fill="#FFD21E" stroke="#16161C" stroke-width="3" stroke-linejoin="round"/>
+            </g>
+          </svg>
+          <span class="plate">戦略</span>
+          <h3>ヤマ張りが全て</h3>
+          <p>1分では全部読めません。「ここが問われる」を見抜けるかどうかの勝負。読み方の作戦が、そのまま点数になります。</p>
+        </article>
+
+        <article class="why-card">
+          <!-- うろ覚えと勘が噛み合った瞬間のひらめき -->
+          <svg class="why-ill" viewBox="0 0 96 96" aria-hidden="true">
+            <g stroke="#16161C" stroke-width="3" stroke-linecap="round">
+              <path d="M48 6 v9"/><path d="M20 18 l6.5 6.5"/><path d="M76 18 l-6.5 6.5"/>
+              <path d="M8 46 h9"/><path d="M88 46 h-9"/>
+            </g>
+            <circle cx="48" cy="45" r="21" fill="#FFD21E" stroke="#16161C" stroke-width="3"/>
+            <path d="M41 45 l5 6 10 -13" fill="none" stroke="#16161C" stroke-width="4"
+                  stroke-linecap="round" stroke-linejoin="round"/>
+            <rect x="39" y="66" width="18" height="8" fill="#fff" stroke="#16161C" stroke-width="3"/>
+            <rect x="39" y="74" width="18" height="10" rx="3" fill="#D9D6CE" stroke="#16161C" stroke-width="3"/>
+          </svg>
+          <span class="plate p3">快感</span>
+          <h3>まぐれが起きる</h3>
+          <p>うろ覚えと勘がガッチリ噛み合う瞬間があります。自分でもなぜ分かったのか説明できない正解が、いちばん気持ちいい。</p>
+        </article>
+
+        <article class="why-card">
+          <!-- 自信満々の珍回答 -->
+          <svg class="why-ill" viewBox="0 0 96 96" aria-hidden="true">
+            <path d="M12 14 h72 a6 6 0 0 1 6 6 v40 a6 6 0 0 1 -6 6 h-38 l-17 15 v-15 h-17 a6 6 0 0 1 -6 -6 v-40 a6 6 0 0 1 6 -6 z"
+                  fill="#fff" stroke="#16161C" stroke-width="3" stroke-linejoin="round"/>
+            <text x="48" y="53" text-anchor="middle" fill="#E8352B"
+                  font-family="Zen Maru Gothic, sans-serif" font-weight="900" font-size="34">！？</text>
+          </svg>
+          <span class="plate p4">笑い</span>
+          <h3>珍回答が出る</h3>
+          <p>必死になるほど、とんでもない勘違いが飛び出します。正解した人より、盛大に外した人のほうが盛り上がる。</p>
+        </article>
+
+        <article class="why-card">
+          <!-- 誰でも参加できる -->
+          <svg class="why-ill" viewBox="0 0 96 96" aria-hidden="true">
+            <g stroke="#16161C" stroke-width="3" stroke-linejoin="round">
+              <circle cx="22" cy="42" r="11" fill="#FF7A1A"/>
+              <path d="M6 78 a16 16 0 0 1 32 0 z" fill="#FF7A1A"/>
+              <circle cx="74" cy="42" r="11" fill="#2ED0E8"/>
+              <path d="M58 78 a16 16 0 0 1 32 0 z" fill="#2ED0E8"/>
+              <circle cx="48" cy="34" r="13" fill="#25B75C"/>
+              <path d="M29 78 a19 19 0 0 1 38 0 z" fill="#25B75C"/>
+            </g>
+          </svg>
+          <span class="plate p2">気軽さ</span>
+          <h3>誰でもできる</h3>
+          <p>予備知識も準備もいりません。記事さえあれば成立するので、学校でも職場でも、飲みの席でもそのまま遊べます。</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="band how">
+    <div class="shell">
+      <h2>遊びかたは3ステップ</h2>
+      <div class="how-grid">
+        <div class="how-step">
+          <span class="how-num">1</span>
+          <div class="txt">
+            <p class="how-time">1分予習</p>
+            <h3>記事を読む</h3>
+            <p>Wikipediaの記事が1つ渡されます。全員同じ記事を、ただ黙って読む時間です。
+              この1本から3問出ますが、どこが問われるかは分かりません。</p>
+          </div>
+          <img class="shot" src="shots/05-study.png" width="900" height="700"
+               alt="予習画面。記事の本文と、正解・誤答の点数が表示されている" loading="lazy">
+        </div>
+        <div class="how-step">
+          <span class="how-num">2</span>
+          <div class="txt">
+            <p class="how-time">クイズ</p>
+            <h3>いちばん早く答える</h3>
+            <p>記事は消えて、問題と選択肢が出ます。最初に選んだ人の解答で決まり。正解なら加点、外せば同じだけ減点。</p>
+          </div>
+          <img class="shot" src="shots/06-question.png" width="900" height="700"
+               alt="出題画面。4つの選択肢と、残り時間を示す時計" loading="lazy">
+        </div>
+        <div class="how-step">
+          <span class="how-num">3</span>
+          <div class="txt">
+            <p class="how-time">結果</p>
+            <h3>順位と記事が出る</h3>
+            <p>最後に順位と、読んだ記事へのリンクが出ます。答えられなかったところは、そのまま読み返せます。</p>
+          </div>
+          <img class="shot" src="shots/08-result.png" width="900" height="700"
+               alt="最終結果画面。順位と、今回読んだ記事へのリンク" loading="lazy">
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="band modes">
+    <div class="shell">
+      <h2>ゲームモードは3種類</h2>
+      <div class="mode-row">
+        <div class="mode-item">
+          <span class="plate p3">固定点</span>
+          <p>正解なら<b>1,000点</b>。いちばん素直なルールです。</p>
+        </div>
+        <div class="mode-item">
+          <span class="plate">人気度</span>
+          <p>記事の<b>PV数と被リンク数</b>が点数になります。有名な記事ほど高配点。</p>
+        </div>
+        <div class="mode-item">
+          <span class="plate p2">最大数値</span>
+          <p>記事の中で<b>いちばん大きい数字</b>が点数。たまにとんでもない桁になります。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  <div class="shell">
+    <h2>この企画の元ネタ</h2>
+    <ul>
+      <li>📺 <a href="https://www.youtube.com/@bakibakiDT" rel="noopener">バキ童チャンネル【ぐんぴぃ】</a></li>
+      <li>▶ <a href="https://www.youtube.com/watch?v=RWWp09sJ54I" rel="noopener">【Wikipedia1分予習クイズ】バキ童VS大鶴肥満VS東大生の極限バトル！</a></li>
+      <li>▶ <a href="https://www.youtube.com/watch?v=33jR5YAt23g" rel="noopener">【数クイズ】桁違いの超インフレ！巨大な数字で一発逆転クイズバトル！</a></li>
+    </ul>
+    <p class="fine">個人開発の非公式ファンメイド作品です。チャンネルおよび動画制作者とは関係ありません。</p>
+  </div>
+</footer>
+
+<script>
+(() => {
+  // ヒーローのデモ。1分の予習が流れ、時間切れで問題に切り替わる。
+  // 実時間で待つと誰も見てくれないので早送りで回す。
+  const clock  = document.getElementById("clock");
+  const needle = document.getElementById("needle");
+  const quiz   = document.getElementById("quiz");
+  const marks  = [...document.querySelectorAll(".hl")];
+
+  // 残り t 秒を、1周ぶんの針の角度に直す
+  const setHand = (t) => {
+    needle.style.transform = `rotate(${(1 - t / 60) * 360}deg)`;
+    clock.classList.toggle("is-low", t <= 10);
+  };
+
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    // 動きを止める設定のときは、完成形だけを見せる
+    setHand(0);
+    marks.forEach(m => m.classList.add("on"));
+    quiz.classList.add("on");
+    return;
+  }
+
+  const TICK = 150;    // 1秒ぶんの表示時間
+  const HOLD = 2600;   // 問題を見せておく時間
+  let t = 60;
+
+  function frame(){
+    setHand(t);
+    // 予習中に、覚えるべき箇所へ順に線を引いていく
+    marks.forEach(m => m.classList.toggle("on", t <= Number(m.dataset.at)));
+
+    if (t > 0) { t--; setTimeout(frame, TICK); return; }
+
+    quiz.classList.add("on");
+    setTimeout(() => {
+      quiz.classList.remove("on");
+      marks.forEach(m => m.classList.remove("on"));
+      t = 60;
+      setTimeout(frame, 500);
+    }, HOLD);
+  }
+
+  frame();
+})();
+</script>
+</body>
+</html>

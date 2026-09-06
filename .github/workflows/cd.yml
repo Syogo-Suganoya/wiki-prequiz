@@ -1,0 +1,142 @@
+name: CD
+
+# ── いまは自動デプロイを止めてある ─────────────────────────────
+# デプロイ先がまだ無い状態で main への push に繋ぐと、
+# 失敗通知が出続けるだけで何の役にも立たないため。
+#
+# 有効にする手順は DEPLOY.md「7. CD（GitHub Actions）」を参照。
+# 下の push: ブロックのコメントを外すと動きだす。
+# その前に Workload Identity 連携と Secrets を用意し、
+# 一度 workflow_dispatch で手動実行して通ることを確かめること。
+#
+# push:
+#   branches: [main]
+on:
+  workflow_dispatch:
+
+# デプロイ中に次のデプロイを重ねない。打ち切らずに順番待ちさせる
+concurrency:
+  group: cd-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write # Workload Identity 連携に必要（鍵ファイルを使わないため）
+
+jobs:
+  # web だけの変更で Cloud Run を再デプロイしないよう、何が変わったかを先に見る
+  changes:
+    name: 変更範囲の判定
+    runs-on: ubuntu-latest
+    outputs:
+      api: ${{ steps.filter.outputs.api }}
+      web: ${{ steps.filter.outputs.web }}
+      firebase: ${{ steps.filter.outputs.firebase }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            api:
+              - 'api/**'
+            web:
+              - 'web/**'
+            firebase:
+              - 'firebase/firestore.rules'
+              - 'firebase/firestore.indexes.json'
+
+  # ルールはアプリより先に出す。
+  # 後回しにすると、一時的に無防備な本番ができてしまう
+  firestore:
+    name: Firestore ルール / インデックス
+    needs: changes
+    if: needs.changes.outputs.firebase == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm install -g firebase-tools
+      - name: デプロイ
+        working-directory: firebase
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+        run: |
+          firebase deploy \
+            --only firestore:rules,firestore:indexes \
+            --project "${{ secrets.GCP_PROJECT_ID }}" \
+            --non-interactive
+
+  api:
+    name: API → Cloud Run
+    needs: [changes, firestore]
+    # firestore を飛ばした場合でも api は動かしたい
+    if: |
+      always() &&
+      needs.firestore.result != 'failure' &&
+      (needs.changes.outputs.api == 'true' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # 鍵ファイルは作らない。OIDC で一時的な資格情報を受け取る
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: デプロイ
+        run: |
+          gcloud run deploy prequiz-api \
+            --source api \
+            --region asia-northeast1 \
+            --project "${{ secrets.GCP_PROJECT_ID }}" \
+            --service-account "${{ secrets.CLOUD_RUN_SERVICE_ACCOUNT }}" \
+            --min-instances=1 \
+            --allow-unauthenticated \
+            --set-env-vars "FIREBASE_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }},GEMINI_MODEL=gemini-3.8-flash,WIKIMEDIA_USER_AGENT=${{ secrets.WIKIMEDIA_USER_AGENT }},CORS_ORIGINS=${{ secrets.CORS_ORIGINS }}" \
+            --set-secrets "GEMINI_API_KEY=gemini-api-key:latest"
+
+      # エミュレータ向けの設定が紛れ込んでいないかを、出した直後に確かめる。
+      # FIRESTORE_EMULATOR_HOST が残っていると全機能が落ちる
+      - name: 疎通確認
+        run: |
+          URL=$(gcloud run services describe prequiz-api \
+            --region asia-northeast1 --project "${{ secrets.GCP_PROJECT_ID }}" \
+            --format='value(status.url)')
+          echo "URL: $URL"
+          BODY=$(curl -fsS "$URL/api/health")
+          echo "$BODY"
+          echo "$BODY" | grep -q '"using_emulator":false' \
+            || { echo "本番なのにエミュレータへ向いている"; exit 1; }
+          echo "$BODY" | grep -q '"firestore":"ok"' \
+            || { echo "Firestore に繋がっていない"; exit 1; }
+
+  web:
+    name: Web → Vercel
+    needs: [changes, api]
+    # api を飛ばした場合でも web は動かしたい
+    if: |
+      always() &&
+      needs.api.result != 'failure' &&
+      (needs.changes.outputs.web == 'true' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm install -g vercel
+      - name: デプロイ
+        working-directory: web
+        run: |
+          vercel pull --yes --environment=production --token="${{ secrets.VERCEL_TOKEN }}"
+          vercel build --prod --token="${{ secrets.VERCEL_TOKEN }}"
+          vercel deploy --prebuilt --prod --token="${{ secrets.VERCEL_TOKEN }}"

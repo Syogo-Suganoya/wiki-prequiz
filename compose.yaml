@@ -1,0 +1,97 @@
+name: prequiz
+
+services:
+  # ── Firebase エミュレータ（Firestore + Auth）─────────────────────────
+  # 本番の Firestore を汚さずに開発するための唯一のデータストア。
+  # 起動には Java が必要なため専用イメージをビルドする。
+  emulator:
+    build:
+      context: ./firebase
+    container_name: prequiz-emulator
+    ports:
+      - "4000:4000" # Emulator UI
+      - "8080:8080" # Firestore
+      - "9099:9099" # Authentication
+    volumes:
+      - ./firebase/firebase.json:/opt/firebase/firebase.json:ro
+      - ./firebase/firestore.rules:/opt/firebase/firestore.rules:ro
+      - ./firebase/firestore.indexes.json:/opt/firebase/firestore.indexes.json:ro
+      # エミュレータのデータを永続化（再起動してもルームや記事プールが残る）
+      - emulator-data:/opt/firebase/.data
+    environment:
+      GCLOUD_PROJECT: ${FIREBASE_PROJECT_ID:-prequiz-local}
+    healthcheck:
+      # Firestore エミュレータが受け付け可能になるまで api を待たせる
+      test: ["CMD", "curl", "-sf", "http://localhost:8080/"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+      start_period: 20s
+
+  # ── バックエンド API（FastAPI）───────────────────────────────────────
+  api:
+    build:
+      context: ./api
+      target: dev
+    container_name: prequiz-api
+    ports:
+      - "8000:8000"
+    volumes:
+      # ホットリロードのためソースをバインドマウント
+      - ./api:/app
+      # コンテナ内の依存関係をホストの空ディレクトリで潰さない
+      - /app/.venv
+    environment:
+      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-prequiz-local}
+      # この2つが設定されている限り Admin SDK は本番ではなくエミュレータを見る
+      FIRESTORE_EMULATOR_HOST: emulator:8080
+      FIREBASE_AUTH_EMULATOR_HOST: emulator:9099
+      # モックかどうかはこの変数だけで決まる。既定はモック。
+      # 実データ（Wikipedia + Gemini）を使うときだけ .env で false にする
+      USE_MOCK: ${USE_MOCK:-true}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.8-flash}
+      WIKIMEDIA_USER_AGENT: ${WIKIMEDIA_USER_AGENT:-}
+      CORS_ORIGINS: http://localhost:5173
+    depends_on:
+      emulator:
+        condition: service_healthy
+
+  # ── フロントエンド（Vite dev server）─────────────────────────────────
+  web:
+    build:
+      context: ./web
+      target: dev
+    container_name: prequiz-web
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./web:/app
+      - /app/node_modules
+    environment:
+      # コンテナ外（ブラウザ）から見えるホスト名で指定する必要がある
+      VITE_API_BASE_URL: http://localhost:8000
+      VITE_FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-prequiz-local}
+      VITE_FIRESTORE_EMULATOR_HOST: localhost:8080
+      VITE_AUTH_EMULATOR_URL: http://localhost:9099
+    depends_on:
+      - api
+
+  # ── LP 用スクリーンショット撮影（通常の起動には含めない）─────────────
+  # docker compose --profile shots up --build shots
+  shots:
+    build:
+      context: ./docs/shots-image
+    profiles: ["shots"]
+    volumes:
+      # 撮影結果を lp/shots へ書き出すため、リポジトリごとマウントする
+      - .:/work
+    environment:
+      BASE_URL: http://web:5173
+      OUT_DIR: /work/lp/shots
+    depends_on:
+      - web
+      - api
+
+volumes:
+  emulator-data:

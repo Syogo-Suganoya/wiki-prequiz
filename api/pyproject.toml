@@ -1,0 +1,21 @@
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
+# コメント・docstring は日本語で書くため、全角括弧などの「紛らわしい文字」検査は外す
+ignore = ["RUF001", "RUF002", "RUF003"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unused_ignores = true
+
+# firebase-admin は型スタブ（py.typed）を同梱していないため個別に緩める
+[[tool.mypy.overrides]]
+module = ["firebase_admin.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"

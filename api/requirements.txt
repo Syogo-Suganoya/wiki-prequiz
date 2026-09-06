@@ -1,0 +1,13 @@
+fastapi>=0.141,<1.0
+uvicorn[standard]>=0.52,<1.0
+pydantic>=2.13,<3.0
+pydantic-settings>=2.15,<3.0
+
+# Firestore / Auth（Admin SDK はセキュリティルールをバイパスする）
+firebase-admin>=7.5,<8.0
+
+# Gemini（新 SDK。gemini-3.x 系はこちらを使う。旧 google-generativeai は使わない）
+google-genai>=2.22,<3.0
+
+# Wikipedia / Wikimedia REST 用の HTTP クライアント
+httpx>=0.28,<1.0
