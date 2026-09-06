@@ -153,19 +153,29 @@ Firebase コンソール → **Firestore Database → ルール** に
 
 ## 4. API を Cloud Run へ
 
-### Gemini のキーを Secret Manager に置く
+### 秘密は Secret Manager に置く
 
 環境変数に直接書かない。リビジョンの設定に平文で残り、閲覧権限のある全員に見えるため。
+
+2つある。**Gemini のキー**と、**記事プール構築の合言葉**。
 
 ```bash
 printf '%s' 'AIza...' | gcloud secrets create gemini-api-key \
   --data-file=- --project=wiki-prequiz
 
-gcloud secrets add-iam-policy-binding gemini-api-key \
-  --member="serviceAccount:prequiz-api@wiki-prequiz.iam.gserviceaccount.com" \
-  --role="roles/secretmanager.secretAccessor" \
-  --project=wiki-prequiz
+# 合言葉は中身に意味が無いので、その場で作ってそのまま流し込む
+openssl rand -hex 32 | tr -d '\n' | gcloud secrets create admin-token \
+  --data-file=- --project=wiki-prequiz
+
+for s in gemini-api-key admin-token; do
+  gcloud secrets add-iam-policy-binding "$s" \
+    --member="serviceAccount:prequiz-api@wiki-prequiz.iam.gserviceaccount.com" \
+    --role="roles/secretmanager.secretAccessor" \
+    --project=wiki-prequiz
+done
 ```
+
+`tr -d '\n'` を忘れないこと。改行が混ざると、手で叩くときの値と一致しなくなる。
 
 ### CLI
 
@@ -178,7 +188,7 @@ gcloud run deploy prequiz-api \
   --min-instances=1 \
   --allow-unauthenticated \
   --set-env-vars "FIREBASE_PROJECT_ID=wiki-prequiz,GEMINI_MODEL=gemini-3.8-flash,WIKIMEDIA_USER_AGENT=WikiPreQuiz/1.0 (https://github.com/Syogo-Suganoya/wiki-prequiz),CORS_ORIGINS=https://wiki-prequiz.vercel.app" \
-  --set-secrets "GEMINI_API_KEY=gemini-api-key:latest"
+  --set-secrets "GEMINI_API_KEY=gemini-api-key:latest,ADMIN_TOKEN=admin-token:latest"
 ```
 
 ### GUI
@@ -194,6 +204,7 @@ gcloud run deploy prequiz-api \
    | `WIKIMEDIA_USER_AGENT` | `WikiPreQuiz/1.0 (https://github.com/Syogo-Suganoya/wiki-prequiz)` |
    | `CORS_ORIGINS` | `https://wiki-prequiz.vercel.app` |
    | `GEMINI_API_KEY` | シークレット `gemini-api-key` の `latest` を参照 |
+   | `ADMIN_TOKEN` | シークレット `admin-token` の `latest` を参照 |
 
 3. **コンテナ → 全般** でインスタンスの最小数を **1** にする。
 4. **セキュリティ** タブでサービスアカウントに `prequiz-api` を選ぶ。
@@ -340,7 +351,38 @@ Vercel 側では撮影しない（Chromium もエミュレータも要るため�
 
 ---
 
-## 7. CD（GitHub Actions）
+## 7. 記事プールの補充（手動）
+
+実データで動かすとき、出題の題材は `articles` コレクションに貯めておく。
+ゲーム開始時に何十本も取りに行くとレイテンシが跳ねるため。
+
+**定期実行は置いていない。貯めたいときに手で叩く。**
+人気記事の顔ぶれは日単位でしか動かないうえ、Wikimedia の人気一覧は
+出題に向かない記事（スタブ、曖昧さ回避、季節ネタ、公序良俗に触れるもの）も返す。
+勝手に増え続けるより、人の目を通したタイミングで足すほうが扱いやすい。
+
+```bash
+TOKEN=$(gcloud secrets versions access latest --secret=admin-token --project=wiki-prequiz)
+
+curl -X POST \
+  'https://prequiz-api-412961422899.asia-northeast1.run.app/api/articles/build-pool?limit=50' \
+  -H "X-Admin-Token: $TOKEN"
+```
+
+`{"added": 42, "skipped": 8, "seen": 50}` のように返る。
+`skipped` は題材にならなかったぶん（短すぎる、PV が少ない、取得に失敗）。
+
+**この操作は合言葉が要る。** Wikipedia と Gemini を記事数ぶん呼ぶので、
+公開エンドポイントのまま置くと、URL を知っているだけで課金させられる。
+`ADMIN_TOKEN` が未設定なら誰も通さない（503 を返す）。
+
+貯めたあとは Firestore コンソールで `articles` を眺めて、
+出したくない記事の `enabled` を `false` にする。抽出はこのフラグを見ている
+（[`content.py`](api/app/content.py) の `_candidates`）。
+
+---
+
+## 8. CD（GitHub Actions）
 
 [`.github/workflows/`](.github/workflows/) に2つ置いてある。
 

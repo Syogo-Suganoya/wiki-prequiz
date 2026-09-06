@@ -1,4 +1,4 @@
-"""Gemini による作問と、記事中の最大数値の抽出。
+"""Gemini による作問。
 
 構造化出力（`response_schema`）を必ず使う。JSON のパース失敗を
 リトライで拾う設計にすると、失敗が本番でだけ顔を出すため。
@@ -30,11 +30,6 @@ class GeneratedQuestion(BaseModel):
 
 class GeneratedQuestions(BaseModel):
     questions: list[GeneratedQuestion]
-
-
-class MaxNumber(BaseModel):
-    value: int = Field(description="記事中で最大の数量。見つからなければ 0")
-    context: str = Field(description="その数値が何を指すか（例: 標高3776m）")
 
 
 class GeminiError(RuntimeError):
@@ -76,17 +71,6 @@ QUESTION_PROMPT = """あなたはクイズの作問者です。
 {text}
 """
 
-MAX_NUMBER_PROMPT = """次の Wikipedia 記事の本文から、最も大きい「数量」を1つ抜き出してください。
-
-対象: 人口・金額・距離・面積・質量・件数など、量を表す数値。
-除外: 西暦・元号・順序数（第N回）・章番号・電話番号・型番。
-見つからなければ value に 0 を入れてください。
-
-本文:
-{text}
-"""
-
-
 def make_questions(title: str, text: str, count: int) -> list[Question]:
     """記事から4択問題をつくる。選択肢は必ずこちらでシャッフルする。"""
     model = get_settings().gemini_model
@@ -120,20 +104,3 @@ def make_questions(title: str, text: str, count: int) -> list[Question]:
         raise GeminiError("4択として成立する問題がありませんでした")
     return questions
 
-
-def extract_max_number(text: str) -> tuple[int, str]:
-    """記事中の最大数値。`MAX_NUMBER` モードの配点に使う。
-
-    正規表現だと「1707年」「第2次」を拾ってしまうので LLM に判定させる。
-    """
-    model = get_settings().gemini_model
-    res = _client().models.generate_content(
-        model=model,
-        contents=MAX_NUMBER_PROMPT.format(text=text),
-        config=_config(MaxNumber),
-    )
-    parsed = res.parsed
-    if not isinstance(parsed, MaxNumber) or parsed.value <= 0:
-        return 0, ""
-    # 天文学的な数値による一発ゲーム終了を防ぐ
-    return min(parsed.value, 10**15), parsed.context

@@ -26,6 +26,7 @@ class Article:
     extract: str
     pageviews30d: int
     backlinks: int
+    # 本文から取り出した最大の数量。見つからなければ 0
     max_number: int
     max_number_context: str
     questions: list[Question] = field(default_factory=list)

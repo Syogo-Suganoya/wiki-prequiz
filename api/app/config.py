@@ -33,6 +33,12 @@ class Settings(BaseSettings):
 
     cors_origins: str = "http://localhost:5173"
 
+    # 記事プールの構築など、運用者だけが叩く操作の合言葉。
+    # 未設定なら、その操作は誰にも通さない（開けっ放しにしない）。
+    # プール構築は Wikipedia と Gemini を何十回も呼ぶので、
+    # 無防備なまま置くと URL を知っているだけで課金させられる。
+    admin_token: str = ""
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

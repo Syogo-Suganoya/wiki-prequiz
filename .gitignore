@@ -9,3 +9,5 @@ __pycache__/
 dist/
 firebase/.data/
 .out/
+# tsc -b の中間ファイル。ビルドのたびに変わるので追跡しない
+*.tsbuildinfo

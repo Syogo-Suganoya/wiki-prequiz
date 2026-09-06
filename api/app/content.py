@@ -5,6 +5,7 @@ game 側はどちらから来たかを知らない（app.models.Article に揃�
 
 実データの経路は「プールから選ぶ → キャッシュを見る → 無ければ取りに行く」。
 ゲーム中に Wikipedia を叩くのは、キャッシュが切れていたときだけ。
+LLM を呼ぶのは作問だけで、記事を集める段には呼ばない。
 """
 
 from __future__ import annotations
@@ -14,7 +15,7 @@ import random
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from app import gemini, wikipedia
+from app import gemini, maxnumber, wikipedia
 from app.config import get_settings
 from app.firestore import get_db
 from app.mock_data import ARTICLES
@@ -70,14 +71,32 @@ def _cached(doc: dict[str, Any]) -> Article | None:
         fetched = fetched.replace(tzinfo=UTC)
     if datetime.now(UTC) - fetched > CACHE_TTL:
         return None
-    return Article(
+    return _to_article(
         title=doc["title"],
         url=doc["url"],
         extract=doc["extract"],
         pageviews30d=int(doc.get("pageviews30d", 0)),
         backlinks=int(doc.get("backlinks", 0)),
-        max_number=int(doc.get("maxNumber", {}).get("value", 0)),
-        max_number_context=str(doc.get("maxNumber", {}).get("context", "")),
+    )
+
+
+def _to_article(
+    *, title: str, url: str, extract: str, pageviews30d: int, backlinks: int
+) -> Article:
+    """最大数値は保存せず、本文から毎回その場で出す。
+
+    正規表現なので一瞬で終わる。保存すると、本文を取り直したときに
+    数値だけ古いまま残る道ができてしまう。導出できるものは持たない。
+    """
+    value, context = maxnumber.extract(extract)
+    return Article(
+        title=title,
+        url=url,
+        extract=extract,
+        pageviews30d=pageviews30d,
+        backlinks=backlinks,
+        max_number=value,
+        max_number_context=context,
     )
 
 
@@ -90,7 +109,6 @@ def _store(article: Article) -> None:
             "charCount": len(article.extract),
             "pageviews30d": article.pageviews30d,
             "backlinks": article.backlinks,
-            "maxNumber": {"value": article.max_number, "context": article.max_number_context},
             "fetchedAt": datetime.now(UTC),
             "enabled": True,
         }
@@ -98,22 +116,24 @@ def _store(article: Article) -> None:
 
 
 def _refresh(title: str) -> Article:
-    """Wikipedia から取り直し、最大数値も出してキャッシュへ入れる。"""
+    """Wikipedia から取り直してキャッシュへ入れる。**Gemini は呼ばない。**
+
+    記事を集めるのに LLM は要らない。本文も PV も被リンクも Wikimedia が返し、
+    最大数値は本文から正規表現で出せる（[`maxnumber`](maxnumber.py)）。
+    LLM を使うのは作問だけ。
+    """
     raw = asyncio.run(wikipedia.fetch_article(title))
     # 先に切り詰めてから判定する。長さの基準は「予習で読む本文」に対するもの
     text = wikipedia.trim_for_study(raw.extract)
     if not wikipedia.is_usable(raw, text):
         raise NoArticleError(f"題材として成立しません: {title}")
 
-    value, context = gemini.extract_max_number(text)
-    article = Article(
+    article = _to_article(
         title=raw.title,
         url=raw.url,
         extract=text,
         pageviews30d=raw.pageviews30d,
         backlinks=raw.backlinks,
-        max_number=value,
-        max_number_context=context,
     )
     _store(article)
     return article

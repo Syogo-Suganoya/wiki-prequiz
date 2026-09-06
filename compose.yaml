@@ -52,6 +52,8 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.8-flash}
       WIKIMEDIA_USER_AGENT: ${WIKIMEDIA_USER_AGENT:-}
+      # 記事プール構築の合言葉。未設定なら手元でもその操作は通らない
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-}
       CORS_ORIGINS: http://localhost:5173
     depends_on:
       emulator:

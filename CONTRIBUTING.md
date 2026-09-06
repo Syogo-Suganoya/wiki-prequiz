@@ -39,15 +39,25 @@ docker compose up
 ### 実データで動かす
 
 ```bash
-# .env に USE_MOCK=false と GEMINI_API_KEY を書いてから
+# .env に USE_MOCK=false と GEMINI_API_KEY と ADMIN_TOKEN を書いてから
 docker compose up -d
 
 # 記事プールを貯めておく（ゲーム開始時に何十本も取りに行かせないため）
-curl -X POST 'http://localhost:8000/api/articles/build-pool?limit=30'
+curl -X POST 'http://localhost:8000/api/articles/build-pool?limit=30' \
+  -H "X-Admin-Token: $ADMIN_TOKEN"
 ```
 
 プールが空でもゲームは始まる（その場で人気記事から作る）が、
 `start` のレイテンシが跳ねるので普段は貯めておく。
+
+**プール構築は合言葉（`ADMIN_TOKEN`）が要る。** Wikipedia と Gemini を
+何十回も呼ぶ操作なので、URL を知っているだけで課金させられては困る。
+未設定なら誰も通さない（503）。設定を忘れて素通しになるより、
+通らないほうが気づける。
+
+**定期実行は置いていない。** 人気記事の顔ぶれは日単位でしか動かないし、
+Wikimedia の人気一覧は出題に向かない記事も返すので、人の目を通したい。
+貯めたいときに手で叩く運用にしてある。
 
 ## サービス構成
 

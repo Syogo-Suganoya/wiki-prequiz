@@ -6,6 +6,7 @@
 本番では Firebase Authentication の ID トークン検証に差し替える。
 """
 
+import secrets
 from datetime import UTC, datetime
 from typing import Any
 
@@ -37,6 +38,23 @@ def require_player(x_player_id: str | None) -> str:
     if not x_player_id:
         raise HTTPException(status_code=401, detail="X-Player-Id ヘッダが必要です")
     return x_player_id
+
+
+def require_admin(x_admin_token: str | None) -> None:
+    """運用者だけが叩ける操作の入口。
+
+    Cloud Run は全体を公開しないと遊べないので、IAM では個別の口を守れない。
+    合言葉を1つ持たせて、それを知っている人だけ通す。
+
+    **未設定なら誰も通さない。** 「設定を忘れたら素通し」だと、
+    忘れたことに気づく機会がないまま開けっ放しになる。
+    """
+    expected = get_settings().admin_token
+    if not expected:
+        raise HTTPException(status_code=503, detail="ADMIN_TOKEN が未設定です")
+    # 文字列の比較にかかる時間から中身を推測されないようにする
+    if not x_admin_token or not secrets.compare_digest(x_admin_token, expected):
+        raise HTTPException(status_code=401, detail="X-Admin-Token ヘッダが不正です")
 
 
 class TimeResponse(BaseModel):
@@ -185,12 +203,20 @@ def start(room_id: str) -> dict[str, bool]:
 
 
 @app.post("/api/articles/build-pool")
-def build_pool(limit: int = 30) -> dict[str, Any]:
-    """記事プールを貯める。定期実行から叩くことを想定している。
+def build_pool(
+    limit: int = 30,
+    x_admin_token: str | None = Header(default=None),
+) -> dict[str, Any]:
+    """記事プールを貯める。**運用者が手で叩く。**
+
+    定期実行は置いていない。人気記事の顔ぶれは日単位でしか動かないうえ、
+    プールには人の目で選別を入れたい（Wikimedia の人気一覧は
+    出題に向かない記事も返す）ので、勝手に増えていくほうが困る。
 
     ゲーム開始時に何十本も取りに行くとレイテンシが跳ねるため、
     普段はここで貯めたものを使う。
     """
+    require_admin(x_admin_token)
     if get_settings().is_mock:
         raise HTTPException(status_code=409, detail="USE_MOCK=true のため記事を取得しません")
     return content.build_pool(limit=limit)
