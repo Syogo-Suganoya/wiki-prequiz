@@ -32,9 +32,11 @@ export function App() {
     setRoomId(id);
   };
 
-  // 部屋から出る。リロードはしないので、ニックネームや設定はそのまま残る
+  // 部屋から出る。リロードはしないので、ニックネームや設定はそのまま残る。
+  // 落とすのは ?room= だけ。"/" と書くと、本番では LP のパスへ飛んでしまう
+  // （ゲームは /quiz に置いてある）
   const leave = () => {
-    history.replaceState(null, "", "/");
+    history.replaceState(null, "", location.pathname);
     setRoomId(null);
   };
 

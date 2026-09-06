@@ -65,8 +65,18 @@ export function playerId(): string {
   return id;
 }
 
+// API の置き場所。
+//
+// 未設定なら空文字＝同一オリジンで、開発中は Vite が /api を api コンテナへ
+// 流してくれる（vite.config.ts の proxy）。本番は Vercel と Cloud Run で
+// オリジンが分かれるので、ここに Cloud Run の URL を入れて直接叩く。
+//
+// Vercel の rewrite で中継する手もあるが、このゲームは 400ms ごとに
+// ポーリングして早押しをミリ秒で測る。一段挟むぶんの遅延を持ち込みたくない。
+const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
+
 async function call<T>(path: string, body?: unknown): Promise<T> {
-  const res = await fetch(`/api${path}`, {
+  const res = await fetch(`${API_BASE}/api${path}`, {
     method: body === undefined ? "GET" : "POST",
     headers: { "Content-Type": "application/json", "X-Player-Id": playerId() },
     body: body === undefined ? undefined : JSON.stringify(body),

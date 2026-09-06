@@ -40,8 +40,12 @@ jobs:
           filters: |
             api:
               - 'api/**'
+            # LP とゲームは1つの Vercel プロジェクトに載る（vercel.json 参照）。
+            # どちらが変わっても同じデプロイをやり直す
             web:
               - 'web/**'
+              - 'lp/**'
+              - 'vercel.json'
             firebase:
               - 'firebase/firestore.rules'
               - 'firebase/firestore.indexes.json'
@@ -117,7 +121,7 @@ jobs:
             || { echo "Firestore に繋がっていない"; exit 1; }
 
   web:
-    name: Web → Vercel
+    name: LP + Web → Vercel
     needs: [changes, api]
     # api を飛ばした場合でも web は動かしたい
     if: |
@@ -134,8 +138,8 @@ jobs:
         with:
           node-version: "22"
       - run: npm install -g vercel
+      # ビルドの起点はリポジトリ直下。vercel.json が lp/ と web/ をまとめる
       - name: デプロイ
-        working-directory: web
         run: |
           vercel pull --yes --environment=production --token="${{ secrets.VERCEL_TOKEN }}"
           vercel build --prod --token="${{ secrets.VERCEL_TOKEN }}"
