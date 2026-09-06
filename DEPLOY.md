@@ -223,13 +223,66 @@ curl https://<Cloud Run の URL>/api/health
 
 ---
 
-## 5. フロントエンドを Vercel へ
+## 5. LP とフロントエンドを Vercel へ
+
+**1つの Vercel プロジェクトに両方を載せる。**
+
+| パス | 中身 |
+| :--- | :--- |
+| `/` | LP（[`lp/`](lp/) の静的ファイル） |
+| `/quiz` | ゲーム本体（[`web/`](web/) の Vite ビルド） |
+
+分けても動くが、同じサイトに並べたほうが LP からゲームへの導線が
+相対パス（`/quiz`）で済み、プレビューデプロイでも繋がったまま追随する。
+
+合成の指示は [`vercel.json`](vercel.json) にある。`web` をビルドし、
+`lp/` を出力の直下に、`web/dist/` を `quiz/` に置くだけ。
+アプリ側は [`web/vite.config.ts`](web/vite.config.ts) の `base` が
+ビルド時だけ `/quiz/` になるので、アセットの参照先もそこに揃う。
+
+### `api/` は Vercel に渡さない
+
+[`.vercelignore`](.vercelignore) で `api/` を除いてある。**消してはいけない。**
+
+Vercel は直下の `api/` を**サーバーレス関数の置き場**とみなす決まりがあり、
+中の [`pyproject.toml`](api/pyproject.toml) を見つけて Python ランタイムを
+組み立てようとする。だが `api/pyproject.toml` は ruff と mypy と pytest の
+設定を書いただけのファイルで `[project]` テーブルが無いため、
+`No 'project' table found` でビルドが落ちる。
+
+ここの `api/` は Cloud Run で動かす FastAPI であって Vercel の関数ではない。
+名前がぶつかっているだけなので、渡さないのが正しい。
+
+### 自動ビルドを止めたいとき
+
+[`vercel.json`](vercel.json) に `"ignoreCommand": "exit 0"` が入っていると、
+**push しても Vercel はビルドしない**（`exit 0` は「このコミットは無視」の意味。
+続行させたいときは `exit 1` を返す）。再開するときはこの行を消す。
+
+### ロックファイルは全プラットフォーム分を入れておく
+
+[`web/package-lock.json`](web/package-lock.json) は**必ずホスト側の新しい npm で作る**。
+開発用コンテナ（Node 22 / npm 10.9）の中で `npm install` すると、
+プラットフォーム別の任意依存が**そのコンテナの分（linux-arm64）しか記録されない**。
+すると別のプラットフォームで `npm ci` が落ちる。
+
+* Vercel（linux-x64・新しい npm）… `package.json and package-lock.json are in sync` ではない、と拒否される
+* GitHub Actions（linux-x64）… `Unable to resolve @typescript/typescript-linux-x64`
+* 手元の macOS … `Unable to resolve @typescript/typescript-darwin-arm64`
+
+依存を足したり替えたりしたら、`web/` でこれを走らせて差分をコミットする。
+
+```bash
+npm install --package-lock-only   # ホスト側で。node_modules には触らない
+```
+
+`@typescript/typescript-*`、`@rolldown/binding-*`、`lightningcss-*` が
+20件ほど並んでいれば正しい。1件しか無ければコンテナの中で作ってしまっている。
 
 ### CLI
 
 ```bash
-cd web
-vercel link --project wiki-prequiz
+vercel link --project wiki-prequiz                 # リポジトリ直下で
 vercel env add VITE_API_BASE_URL production        # Cloud Run の URL
 vercel env add VITE_FIREBASE_PROJECT_ID production # wiki-prequiz
 vercel --prod
@@ -239,21 +292,33 @@ vercel --prod
 
 1. [Vercel](https://vercel.com/) → **Add New → Project** で
    `Syogo-Suganoya/wiki-prequiz` を選ぶ。
-2. **Root Directory** に `web` を指定する（リポジトリ直下ではない）。
-   フレームワークは Vite が自動検出される。
+2. **Root Directory** は**リポジトリ直下のまま**にする（`web` ではない）。
+   ビルド設定は [`vercel.json`](vercel.json) が持っているので、
+   フレームワークの自動検出も含めて何も指定しなくてよい。
 3. **Settings → Environment Variables** に以下を入れる。
 
    | 変数 | 値 |
    | :--- | :--- |
-   | `VITE_API_BASE_URL` | Cloud Run のサービス URL |
+   | `VITE_API_BASE_URL` | `https://prequiz-api-412961422899.asia-northeast1.run.app` |
    | `VITE_FIREBASE_PROJECT_ID` | `wiki-prequiz` |
-   | `VITE_FIREBASE_API_KEY` ほか | Firebase コンソールのウェブアプリ設定から |
 
 4. **Deploy**。
 
+> **`VITE_API_BASE_URL` は必須。** 画面は `/api/...` を叩くが、
+> Vercel にその転送先は無い。未設定だと同一オリジンに投げて全部 404 になり、
+> 画面は出るのにゲームが始まらない。
+> 末尾に `/api` や `/` を付けないこと（コード側が `/api` を足す）。
+
 > `VITE_` の付いた値は**ビルド時にバンドルへ埋め込まれ、閲覧者から見える**。
-> Firebase のウェブ API キーは公開前提の値なので問題ないが、
-> Gemini のキーをここに置いてはいけない。あれはサーバー専用。
+> Gemini のキーをここに置いてはいけない。あれはサーバー専用で、
+> Secret Manager から Cloud Run にだけ渡す。
+
+画面は API 越し（`fetch`）で動いていて、**Firebase Web SDK はまだ使っていない**。
+`VITE_FIREBASE_API_KEY` などのウェブアプリ構成が要るのは、
+[DESIGN.md](DESIGN.md) に未着手として挙げてある Firestore の直接購読と
+匿名認証を実装したときから。値は Firebase コンソールの
+[ウェブアプリ設定](https://console.firebase.google.com/project/wiki-prequiz/settings/general)
+にある `firebaseConfig` から取る。
 
 ### デプロイ後
 
@@ -266,10 +331,12 @@ Cloud Run の `CORS_ORIGINS` を実際のドメインに直す。
 
 ## 6. LP
 
-[`lp/`](lp/) は依存のない静的ファイル。Vercel でも GitHub Pages でも置ける。
-公開時は [`lp/index.html`](lp/index.html) の「遊んでみる」の
-リンク先（開発中は `http://localhost:5173/`）を
-`https://wiki-prequiz.vercel.app/` に書き換える。
+[`lp/`](lp/) は依存のない静的ファイル1枚。§5 の Vercel プロジェクトが
+`/` として配信するので、**単独でのデプロイ作業は無い**。
+
+図版（`lp/shots/`）は撮影して**コミットしておく**。
+Vercel 側では撮影しない（Chromium もエミュレータも要るため）。
+画面を変えたら撮り直す — 手順は [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 ---
 
