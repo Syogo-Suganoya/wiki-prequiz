@@ -1,0 +1,18 @@
+# Vercel に渡さないもの。
+#
+# いちばん効くのは api/ の除外。Vercel は直下の `api/` を
+# サーバーレス関数の置き場とみなし、中の pyproject.toml を見て
+# Python ランタイムを組み立てようとする。ここの api/ は
+# Cloud Run で動かす FastAPI なので、名前がぶつかっているだけ。
+# 除いておかないと `No `project` table found in api/pyproject.toml` で落ちる。
+api/
+
+# 以下はビルドに要らない。転送と展開の無駄を省くだけ
+firebase/
+docs/
+.github/
+compose.yaml
+.dockerignore
+DESIGN.md
+DEPLOY.md
+CONTRIBUTING.md
