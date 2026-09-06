@@ -564,6 +564,36 @@ function Lobby({ room }: { room: Room }) {
   );
 }
 
+// 「== あらすじ ==」「==== 3D版 ====」。Wikipedia の見出し記法で、
+// extracts API の explaintext は記号を落としてくれない
+const HEADING = /^[ \t]*(={2,6})[ \t]*(.+?)[ \t]*\1[ \t]*$/;
+
+/**
+ * 記事本文。見出しは記号を外して太字にする。
+ *
+ * 行ごと消す手もあるが、見出しは**予習の役に立つ**。60秒で「どこに何が
+ * 書いてあるか」を掴むための手がかりで、邪魔なのは `=` の記号だけ。
+ *
+ * 記号を落とすのはサーバーではなくここ。落としてしまうと、
+ * どの行が見出しだったかが分からなくなって太字にできない。
+ * 保存してある本文も、作問に渡す本文も、元のままでいい。
+ */
+function ArticleBody({ text }: { text: string }) {
+  return (
+    <div className="article">
+      {text.split("\n").map((line, i) => {
+        const m = HEADING.exec(line);
+        return (
+          <span key={i}>
+            {m ? <b className="art-h">{m[2]}</b> : line}
+            {"\n"}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
 /** 予習画面。ページ全体はスクロールせず、記事だけがスクロールする。 */
 function Study({ room }: { room: Room }) {
   const a = room.article!;
@@ -574,15 +604,19 @@ function Study({ room }: { room: Room }) {
       <div className="study-head pad-x">
         <p className="badge">正解 +{a.basePoint.toLocaleString()} / 誤答 −{a.basePoint.toLocaleString()}</p>
         <h2 className="title">{a.title}</h2>
-        {/* 問題はこの60秒のあいだに作られる。出来ていないことは隠さない。
-            予習が延びた理由が分からないと、止まったように見える */}
-        <p className="note">
-          {room.quizReady
-            ? `この記事から${room.settings.totalRounds}問出ます`
-            : "この記事から出題します（問題を準備しています…）"}
-        </p>
+        {/* 問題はこの60秒のあいだに作られる。出来ていないことも、
+            つまずいたことも隠さない。黙って待たされると、止まったように見える */}
+        {room.quizError && !room.quizReady ? (
+          <p className="warn">{room.quizError}</p>
+        ) : (
+          <p className="note">
+            {room.quizReady
+              ? `この記事から${room.settings.totalRounds}問出ます`
+              : "この記事から出題します（問題を準備しています…）"}
+          </p>
+        )}
       </div>
-      <div className="article">{a.extract}</div>
+      <ArticleBody text={a.extract ?? ""} />
       {mock && (
         <div className="study-foot pad-x">
           <button className="skip" onClick={() => api.skip(room.roomId)}>予習をスキップ（モック）</button>

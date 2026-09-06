@@ -17,29 +17,60 @@ docker compose up
 
 | URL | 内容 |
 | :--- | :--- |
-| http://localhost:5173 | アプリ本体 |
+| http://localhost:3000 | **LP。ここから入る**（本番と同じ形） |
+| http://localhost:3000/quiz | ゲーム本体 |
+| http://localhost:5173/quiz/ | ゲーム本体（Vite に直接。nginx を挟まない） |
 | http://localhost:8000/api/health | API と Firestore の疎通確認 |
 | http://localhost:8000/docs | OpenAPI（FastAPI の自動生成） |
 | http://localhost:4000 | Emulator UI（Firestore の中身を目視で確認する） |
 
+**手元の配置は本番と同じにしてある。** `/` が LP、`/quiz` がゲーム。
+`lp` サービス（nginx）が `lp/` を配り、`/quiz` を `web` へ素通しする
+（[`docs/lp-nginx.conf`](docs/lp-nginx.conf)）。HMR も proxy を通る。
+
+こうしているのは、**パスの食い違いが本番でしか顔を出さないのを避ける**ため。
+実際、LP の「遊んでみる」のリンク先で一度やらかした。
+開発サーバーにも `base: "/quiz/"` を効かせているので、
+Vite へ直接つなぐ場合も末尾に `/quiz/` が要る。
+
 `.env` を書かなくても起動する。既定はモックなので、キーが無くても遊べる。
 
-| `USE_MOCK` | 問題の出どころ | 予習スキップ |
-| :--- | :--- | :--- |
-| `true`（既定） | `api/app/mock_data.py` の固定問題 | 出る |
-| `false` | Wikipedia + Gemini。`GEMINI_API_KEY` と `WIKIMEDIA_USER_AGENT` が必須 | 出ない |
+**`USE_MOCK` が切り替えるのは作問（AI）だけ。記事はいつも本物。**
+
+| | 記事 | 問題 | 予習スキップ |
+| :--- | :--- | :--- | :--- |
+| `USE_MOCK=true`（既定） | Wikipedia（`mock_data` にある10本） | 手で書いた問題 | 出る |
+| `USE_MOCK=false` | Wikipedia | Gemini が記事から作る | 出ない |
+
+記事まで偽物にする必要はない。手元で画面を直すときも本物の長さと構造で
+確かめたいし、Wikipedia の取得は無料で速い。課金されるのは作問だけなので、
+そこだけ切り替える。
+
+**`WIKIMEDIA_USER_AGENT` は常に必須**（記事を取るため）。
+`GEMINI_API_KEY` が要るのは `USE_MOCK=false` のときだけ。
+
+モックの問題は `api/app/mock_data.py` にある。**Wikipedia の記事を読んで
+人が書いた問題**で、記事タイトルがキー。モックのときはこの辞書にある
+タイトルからしか記事を選ばないので、**予習した記事の問題が必ず出る**。
+
+その代わり記事の幅は10本に狭まる。人気記事すべてが対象になる本番の姿とは
+違うので、記事まわりの見た目は一度は `USE_MOCK=false` でも見ること。
+
+**問題を足すには**、プールを貯めて（`POST /api/articles/build-pool`）、
+Firestore の `articles` から本文を読み、**読んだうえで**問題を書いて
+`MOCK_QUESTIONS` に足す。タイトルは Wikipedia の記事名と完全一致させる。
 
 **モックかどうかを決めるのは `USE_MOCK` だけ**で、URL のクエリでは切り替えられない。
 切り替えの主体はサーバー側にあるべきで、クライアントが自称できてはいけないため。
 クライアントは `GET /api/config` の `mock` を見て、開発用の操作を出し分けている。
 
-`USE_MOCK=false` にしたのに動かないときは `GET /api/health` を見る。
-足りない設定が `missing_for_real` に並ぶ。
+動かないときは `GET /api/health` を見る。
+足りない設定が `missing_settings` に並ぶ。
 
 ### 実データで動かす
 
 ```bash
-# .env に USE_MOCK=false と GEMINI_API_KEY と ADMIN_TOKEN を書いてから
+# .env に USE_MOCK=false と GEMINI_API_KEY を書いてから（ADMIN_TOKEN はプール構築用）
 docker compose up -d
 
 # 記事プールを貯めておく（ゲーム開始時に何十本も取りに行かせないため）
@@ -65,7 +96,8 @@ Wikimedia の人気一覧は出題に向かない記事も返すので、人の�
 | :--- | :--- | :--- |
 | `emulator` | Firestore + Auth エミュレータ + Emulator UI | 8080 / 9099 / 4000 |
 | `api` | FastAPI（`uvicorn --reload`） | 8000 |
-| `web` | Vite dev server（HMR） | 5173 |
+| `web` | Vite dev server（HMR）。`base` は `/quiz/` | 5173 |
+| `lp` | nginx。`/` で `lp/` を配り、`/quiz` を `web` へ流す | 3000 |
 | `shots` | LP 用スクリーンショット撮影。通常の起動には含まれない | — |
 
 ## 確認コマンド

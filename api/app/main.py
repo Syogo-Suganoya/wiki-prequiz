@@ -83,9 +83,11 @@ def health() -> dict[str, Any]:
         "using_emulator": settings.use_emulator,
         "gemini_model": settings.gemini_model,
         "mock": settings.is_mock,
-        "question_source": "fixed" if settings.is_mock else "wikipedia+gemini",
-        # 実データで動かすのに足りない設定。空でなければ出題が失敗する
-        "missing_for_real": [] if settings.is_mock else settings.missing_for_real,
+        # 記事はいつも Wikipedia。切り替わるのは問題の出どころだけ
+        "article_source": "wikipedia",
+        "question_source": "fixed" if settings.is_mock else "gemini",
+        # 足りない設定。空でなければ出題が失敗する
+        "missing_settings": settings.missing_settings,
     }
 
 
@@ -216,9 +218,9 @@ def build_pool(
     ゲーム開始時に何十本も取りに行くとレイテンシが跳ねるため、
     普段はここで貯めたものを使う。
     """
+    # USE_MOCK では分岐しない。記事の取得に AI は関わらないので、
+    # モック構成でもプールは本物を貯める
     require_admin(x_admin_token)
-    if get_settings().is_mock:
-        raise HTTPException(status_code=409, detail="USE_MOCK=true のため記事を取得しません")
     return content.build_pool(limit=limit)
 
 

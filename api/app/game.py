@@ -1,7 +1,7 @@
 """ゲーム進行のロジック。
 
 Firestore を唯一の真実とし、状態遷移はすべてトランザクションで行う。
-出題する記事をどこから取るか（固定データか Wikipedia + Gemini か）は
+記事と問題をどこから作るか（Gemini か、AI 無しの穴埋めか）は
 app.content が決めるので、ここでは区別しない。
 """
 
@@ -405,8 +405,9 @@ def prepare_questions(room_id: str) -> dict[str, Any]:
             quiz["articleTitle"], quiz.get("extract", ""), taken["totalRounds"]
         )
     except Exception as exc:
-        # 担当を解放して、次の呼び出しでやり直せるようにする
-        ref.update({"quizClaimedAt": None, "quizError": str(exc)})
+        # 担当を解放して、次の呼び出しでやり直せるようにする。
+        # 画面に出るのはここで入れた文なので、内部事情は混ぜない
+        ref.update({"quizClaimedAt": None, "quizError": content.error_message(exc)})
         raise
 
     ref.collection("private").document("quizSet").update(

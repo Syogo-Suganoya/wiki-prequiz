@@ -12,11 +12,15 @@
 | LP `https://wiki-prequiz.vercel.app/` | ✅ 公開済み |
 | ゲーム `https://wiki-prequiz.vercel.app/quiz` | ✅ 公開済み。API の宛先も埋まっている |
 | Cloud Run `prequiz-api` | ✅ 動作中。Firestore 疎通 OK |
-| 出題 | ⚠️ **モック**（`mock: true` / 固定5問） |
+| 記事 | ✅ 常に Wikipedia（`USE_MOCK` では切り替わらない） |
+| 出題 | ⚠️ **手書きの固定問題**（`mock: true`。記事は10本に限られる） |
 | 記事プール（本番） | ❌ 空 |
 | CD（GitHub Actions） | ❌ 停止中（`workflow_dispatch` のみ） |
 
-ローカルのエミュレータには実データ19件が入っている。本番とは別物。
+ローカルのエミュレータには実データ33件（有効31件）が入っている。本番とは別物。
+
+**`USE_MOCK` が切り替えるのは作問（AI）だけ。** 記事はモックでも本物を読む。
+だから本番のいまも、予習の記事は Wikipedia から来ている。
 
 ---
 
@@ -33,6 +37,10 @@ git add -A && git commit && git push
 
 * `POST /api/articles/build-pool` の合言葉（`ADMIN_TOKEN`）
 * 最大数値の抽出を Gemini から正規表現へ（`api/app/maxnumber.py`）
+* `USE_MOCK` を作問だけの切り替えに（記事は常に Wikipedia）
+* モックの問題を、実記事10本ぶんの手書きに（`api/app/mock_data.py`）
+* Gemini の再試行と、画面に出すエラーメッセージ
+* 見出し記法（`== あらすじ ==`）を太字で表示
 * `.vercelignore`（`api/` を Vercel に渡さない）
 
 push すると Vercel は自動でビルドするが、**Cloud Run は自動では出ない**。
@@ -79,20 +87,20 @@ curl -s https://prequiz-api-412961422899.asia-northeast1.run.app/api/health
 ```
 
 * `"mock": false` になっていること
-* `"missing_for_real": []` が空のままであること
+* `"missing_settings": []` が空のままであること
 * `"using_emulator": false` であること
 
-> **`GEMINI_API_KEY` が本物かどうかは、ここで初めて分かる。**
-> 手元の `.env` はプレースホルダのままで、**Gemini の実呼び出しは一度も
-> 成功していない**。モックを外すと作問が Gemini に切り替わるので、
-> キーが無効なら予習は始まっても問題が出てこない。
-> 予習画面に「問題を準備しています…」が出たまま進まなければ、これを疑う。
+> **Gemini の実呼び出しは手元で確認済み**（本物の記事から4択が作れた）。
+> 失敗しても予習画面に理由が出る。「AI が混み合っています」なら待てば直り、
+> 「AI の利用設定に問題があります」ならキーを疑う。
+> 混雑（503）は自動で3回まで再試行する。
 
 ---
 
 ## 3. 記事プールを貯める（URL を叩く）
 
 定期実行は置かない。**貯めたいときに手で叩く。**
+記事の取得に AI は関わらないので、**`USE_MOCK` の値に関係なく実行できる**。
 
 ```bash
 TOKEN=$(gcloud secrets versions access latest --secret=admin-token --project=wiki-prequiz)
@@ -111,7 +119,7 @@ curl -X POST \
 
 * `真夏の夜の淫夢` — 公序良俗
 * `闇サイト殺人事件` — 実在の被害者がいる事件
-* タイタニック関連が4件 — 同じ題材ばかりで飽きる
+* タイタニック関連が3件 — 同じ題材ばかりで飽きる
 
 タイトルの正規表現（`一覧|曖昧さ回避|Template:` …）では弾けない。
 Firestore コンソールで `articles` を開き、外したい記事の `enabled` を
@@ -125,9 +133,10 @@ Firestore コンソールで `articles` を開き、外したい記事の `enabl
 
 `https://wiki-prequiz.vercel.app/quiz` で「ひとりで遊ぶ」。
 
-* 記事がモックの5本（太陽・カピバラ・万里の長城・富士山・…）**ではない**こと
 * 予習画面に「予習をスキップ（モック）」が**出ない**こと
 * 60秒待たずに問題が出ること（予習の裏で作問が終わっている）
+* **記事が `mock_data` の10本以外からも出ること**
+  （モックのままだと、いつも同じ10本しか出ない）
 * `最大数値` モードで、配点が 1,000 以外になる記事があること
 
 ---

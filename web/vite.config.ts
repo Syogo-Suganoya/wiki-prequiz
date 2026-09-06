@@ -1,11 +1,11 @@
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
-export default defineConfig(({ command }) => ({
-  // 本番は LP が `/`、ゲームが `/quiz` に並ぶので、アセットの参照先を
-  // `/quiz/...` にする。開発サーバーは素の `/` のまま
-  // （撮影コンテナも CONTRIBUTING も http://localhost:5173 を前提にしている）
-  base: command === "build" ? "/quiz/" : "/",
+export default defineConfig({
+  // LP が `/`、ゲームが `/quiz`。本番（Vercel）も開発（nginx 経由）も同じ形に
+  // しておく。ここを開発だけ `/` にすると、パスの食い違いが本番でしか
+  // 顔を出さない（実際、LP の「遊んでみる」のリンク先で一度やらかした）
+  base: "/quiz/",
   plugins: [react()],
   server: {
     host: "0.0.0.0",
@@ -23,4 +23,4 @@ export default defineConfig(({ command }) => ({
       },
     },
   },
-}));
+});

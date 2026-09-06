@@ -6,18 +6,34 @@
 
 from __future__ import annotations
 
+import logging
 import random
+import time
 from functools import lru_cache
 
 from google import genai
+from google.genai import errors as genai_errors
 from google.genai import types
 from pydantic import BaseModel, Field
 
 from app.config import get_settings
 from app.models import Question
 
+log = logging.getLogger(__name__)
+
 # 長考は要らない。記事1本からの作問でレイテンシとコストを無駄に増やさない
 THINKING_LEVEL = types.ThinkingLevel.LOW
+
+# もう一度頼めば通る見込みのあるもの。混雑・レート制限・一時障害。
+# 400 番台の大半（キーが違う、入力が不正）は何度やっても同じなので入れない
+RETRYABLE_STATUS = {429, 500, 502, 503, 504}
+
+# 待ち時間。予習は最短30秒なので、そこに収まる範囲で刻む。
+# 長さ＝再試行の回数（初回を含めて4回）
+BACKOFF_SEC = (1.0, 3.0, 6.0)
+
+# 設定が悪いときの文言。待っても直らないので、そう分かるように書く
+SETUP_PROBLEM = "AI の利用設定に問題があります（管理者の対応が要ります）"
 
 
 class GeneratedQuestion(BaseModel):
@@ -33,16 +49,66 @@ class GeneratedQuestions(BaseModel):
 
 
 class GeminiError(RuntimeError):
-    pass
+    """作問に失敗した。
+
+    **メッセージはそのまま遊んでいる人の画面に出る**（`rooms/{id}.quizError`）。
+    例外の型名やスタックではなく、状況と次の行動が分かる日本語を入れること。
+    """
+
+
+def _friendly(exc: genai_errors.APIError) -> str:
+    """API の失敗を、遊んでいる人に見せる一文にする。
+
+    「何が起きたか」ではなく「待てば直るのか、人を呼ぶのか」が分かるように。
+    """
+    code = getattr(exc, "code", None)
+    if code in (429, 503):
+        return "AI が混み合っています。少し待つと出題が始まります"
+    if code in (500, 502, 504):
+        return "AI 側で一時的な問題が起きています。少し待つと出題が始まります"
+    if code in (401, 403):
+        return SETUP_PROBLEM
+    if code == 400:
+        # キーが無効なときも 400 が返る（status は INVALID_ARGUMENT）。
+        # 記事のせいにすると、直すべき場所を見誤らせる
+        if "api key" in str(getattr(exc, "message", "")).lower():
+            return SETUP_PROBLEM
+        return "この記事からは問題を作れませんでした"
+    return "問題の準備に失敗しました。少し待つと再試行します"
+
+
+def _generate(contents: str, schema: type[BaseModel]) -> types.GenerateContentResponse:
+    """混雑や一時障害は数回まで待って粘る。
+
+    実測で 503（高負荷）が2回続いてから通ったことがある。予習の数十秒のうちに
+    間に合わせたいので、諦めずに刻んで待つ。
+    キーが違うような直らない失敗は、待っても無駄なのですぐ諦める。
+    """
+    model = get_settings().gemini_model
+    client = _client()
+
+    for attempt, wait in enumerate((*BACKOFF_SEC, None), start=1):
+        try:
+            return client.models.generate_content(
+                model=model, contents=contents, config=_config(schema)
+            )
+        except genai_errors.APIError as exc:
+            code = getattr(exc, "code", None)
+            if code not in RETRYABLE_STATUS or wait is None:
+                log.warning("Gemini 呼び出しに失敗 (%s回目, code=%s)", attempt, code)
+                raise GeminiError(_friendly(exc)) from exc
+            log.info("Gemini が %s を返した。%s秒後に再試行 (%s回目)", code, wait, attempt)
+            time.sleep(wait)
+
+    raise GeminiError("問題の準備に失敗しました")  # ここには来ない
 
 
 @lru_cache
 def _client() -> genai.Client:
     key = get_settings().gemini_api_key.strip()
     if not key:
-        raise GeminiError(
-            "GEMINI_API_KEY が未設定です。USE_MOCK=true で起動するか、キーを設定してください"
-        )
+        # これは設定漏れなので、画面に出ても管理者に伝わる文にしておく
+        raise GeminiError(SETUP_PROBLEM)
     return genai.Client(api_key=key)
 
 
@@ -73,15 +139,12 @@ QUESTION_PROMPT = """あなたはクイズの作問者です。
 
 def make_questions(title: str, text: str, count: int) -> list[Question]:
     """記事から4択問題をつくる。選択肢は必ずこちらでシャッフルする。"""
-    model = get_settings().gemini_model
-    res = _client().models.generate_content(
-        model=model,
-        contents=QUESTION_PROMPT.format(n=count, title=title, text=text),
-        config=_config(GeneratedQuestions),
+    res = _generate(
+        QUESTION_PROMPT.format(n=count, title=title, text=text), GeneratedQuestions
     )
     parsed = res.parsed
     if not isinstance(parsed, GeneratedQuestions) or not parsed.questions:
-        raise GeminiError("問題が生成できませんでした")
+        raise GeminiError("この記事からは問題を作れませんでした")
 
     questions: list[Question] = []
     for g in parsed.questions[:count]:
@@ -101,6 +164,6 @@ def make_questions(title: str, text: str, count: int) -> list[Question]:
         )
 
     if not questions:
-        raise GeminiError("4択として成立する問題がありませんでした")
+        raise GeminiError("この記事からは4択が作れませんでした")
     return questions
 

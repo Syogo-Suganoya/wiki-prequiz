@@ -20,6 +20,10 @@ services:
       - emulator-data:/opt/firebase/.data
     environment:
       GCLOUD_PROJECT: ${FIREBASE_PROJECT_ID:-prequiz-local}
+    # 終了時の書き出し（--export-on-exit）を待つ。記事プールが増えるほど
+    # 時間がかかるので、既定の10秒では足りなくなる。
+    # 途中で SIGKILL されると、その回のデータは丸ごと消える
+    stop_grace_period: 60s
     healthcheck:
       # Firestore エミュレータが受け付け可能になるまで api を待たせる
       test: ["CMD", "curl", "-sf", "http://localhost:8080/"]
@@ -54,7 +58,9 @@ services:
       WIKIMEDIA_USER_AGENT: ${WIKIMEDIA_USER_AGENT:-}
       # 記事プール構築の合言葉。未設定なら手元でもその操作は通らない
       ADMIN_TOKEN: ${ADMIN_TOKEN:-}
-      CORS_ORIGINS: http://localhost:5173
+      # 手元は同一オリジン（Vite と nginx が /api を api へ流す）なので
+      # CORS は本来出番が無い。手で別オリジンから叩くとき用に残してある
+      CORS_ORIGINS: http://localhost:5173,http://localhost:3000
     depends_on:
       emulator:
         condition: service_healthy
@@ -71,12 +77,31 @@ services:
       - ./web:/app
       - /app/node_modules
     environment:
-      # コンテナ外（ブラウザ）から見えるホスト名で指定する必要がある
-      VITE_API_BASE_URL: http://localhost:8000
+      # VITE_API_BASE_URL は**あえて設定しない**。
+      # 空なら同一オリジンの /api へ投げ、Vite（5173）と nginx（3000）が
+      # それぞれ api コンテナへ流す。ここに http://localhost:8000 と書くと、
+      # 撮影コンテナの中のブラウザから見た localhost が自分自身になって届かない。
+      # 本番は Vercel と Cloud Run でオリジンが分かれるので、そちらでだけ設定する
       VITE_FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-prequiz-local}
       VITE_FIRESTORE_EMULATOR_HOST: localhost:8080
       VITE_AUTH_EMULATOR_URL: http://localhost:9099
     depends_on:
+      - api
+
+  # ── LP（本番と同じく `/` が LP、`/quiz` がゲーム）─────────────────────
+  # 静的ファイルを配るだけの nginx。/quiz は web へ素通しする。
+  # 本番の配置（vercel.json）を手元で再現するためのもので、
+  # LP からゲームへの導線をここで確かめられる
+  lp:
+    image: nginx:1.27-alpine
+    container_name: prequiz-lp
+    ports:
+      - "3000:80"
+    volumes:
+      - ./lp:/usr/share/nginx/html:ro
+      - ./docs/lp-nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - web
       - api
 
   # ── LP 用スクリーンショット撮影（通常の起動には含めない）─────────────
@@ -89,7 +114,7 @@ services:
       # 撮影結果を lp/shots へ書き出すため、リポジトリごとマウントする
       - .:/work
     environment:
-      BASE_URL: http://web:5173
+      BASE_URL: http://web:5173/quiz/
       OUT_DIR: /work/lp/shots
     depends_on:
       - web

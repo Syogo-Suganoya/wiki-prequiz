@@ -15,13 +15,15 @@ class Settings(BaseSettings):
     firestore_emulator_host: str | None = None
     firebase_auth_emulator_host: str | None = None
 
-    # モックで動かすかどうか。**これだけが判断材料**。
+    # **作問（Gemini）をモックにするかどうか。これだけが判断材料。**
+    # 記事は切り替えの対象外で、いつも Wikipedia から取る。
+    #
     # キーの有無から推測すると「キーは検証用に置いてあるが実際は呼びたくない」
     # といった意図が表現できず、逆に「本番のつもりがキー未設定で黙ってモック」
     # という事故も起こる。切り替えたい意図は、変数として明示的に書く。
     #
     # 既定は True。うっかり実 API を叩いて課金される事故のほうが痛いので、
-    # 実データを使うときだけ明示的に false にする。
+    # 実際に作問させるときだけ明示的に false にする。
     use_mock: bool = True
 
     gemini_api_key: str = ""
@@ -52,13 +54,17 @@ class Settings(BaseSettings):
         return self.use_mock
 
     @property
-    def missing_for_real(self) -> list[str]:
-        """実データで動かすのに足りていない設定。"""
+    def missing_settings(self) -> list[str]:
+        """いまの構成で足りていない設定。
+
+        記事はモックでも実データなので、`WIKIMEDIA_USER_AGENT` は常に要る。
+        `GEMINI_API_KEY` が要るのは、実際に作問させるときだけ。
+        """
         missing = []
-        if not self.gemini_api_key.strip():
-            missing.append("GEMINI_API_KEY")
         if not self.wikimedia_user_agent.strip():
             missing.append("WIKIMEDIA_USER_AGENT")
+        if not self.use_mock and not self.gemini_api_key.strip():
+            missing.append("GEMINI_API_KEY")
         return missing
 
 

@@ -1,8 +1,15 @@
 #!/bin/sh
 set -eu
 
-DATA_DIR=/opt/firebase/.data
+# 書き出し先は、マウントされたボリューム**の下**に掘る。
+# firebase-tools は export の直前に出力先を rmdir するので、
+# マウントポイントそのものを指すと EBUSY で毎回失敗し、
+# 「終了時に保存しているつもりで実は何も残っていない」状態になる。
+VOLUME=/opt/firebase/.data
+DATA_DIR="${VOLUME}/export"
 PROJECT="${GCLOUD_PROJECT:-prequiz-local}"
+
+mkdir -p "${VOLUME}"
 
 # 前回の --export-on-exit で書き出されたデータがある場合だけ --import する。
 # 空ディレクトリに --import すると firebase-tools がエラー終了するため。

@@ -1,11 +1,16 @@
-"""出題する記事を1本用意する。
+"""出題する記事と問題を用意する。
 
-`USE_MOCK` の値だけで、固定データか実データかが切り替わる。
-game 側はどちらから来たかを知らない（app.models.Article に揃えてある）。
+**記事はいつも実データ**（Wikipedia）。プールから選び、キャッシュを見て、
+無ければ取りに行く。ゲーム中に Wikipedia を叩くのは、キャッシュが切れて
+いたときだけ。ここに LLM は要らない。
 
-実データの経路は「プールから選ぶ → キャッシュを見る → 無ければ取りに行く」。
-ゲーム中に Wikipedia を叩くのは、キャッシュが切れていたときだけ。
-LLM を呼ぶのは作問だけで、記事を集める段には呼ばない。
+`USE_MOCK` が切り替えるのは**作問（AI）だけ**。true なら Gemini を呼ばず、
+手で書いた問題（[`mock_data`](mock_data.py)）を出す。手元で遊びながら直すのに、
+記事まで偽物にする必要はないし、毎回課金されるのも困る、という切り分け。
+
+ただしモックのときは、**記事を選ぶ範囲が問題のあるタイトルに狭まる**。
+記事は本物のまま（Wikipedia から取る）だが、どれでもよいわけではなくなる。
+予習した記事の問題が出ないと、ゲームとして成立しないため。
 """
 
 from __future__ import annotations
@@ -15,10 +20,9 @@ import random
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from app import gemini, maxnumber, wikipedia
+from app import gemini, maxnumber, mock_data, wikipedia
 from app.config import get_settings
 from app.firestore import get_db
-from app.mock_data import ARTICLES
 from app.models import Article, Question
 
 # キャッシュの寿命。PV も被リンクも日単位でしか動かないので1日で足りる
@@ -29,14 +33,29 @@ class NoArticleError(RuntimeError):
     """出題できる記事が用意できなかった。"""
 
 
+def error_message(exc: Exception) -> str:
+    """作問の失敗を、画面に出す一文にする。
+
+    通すのは**遊ぶ人向けに書いた文言だけ**。それ以外は伏せて定型文にする。
+    想定外の例外メッセージには、記事タイトルや内部の事情が混ざりうるので、
+    そのまま画面へ流さない。
+    """
+    if isinstance(exc, gemini.GeminiError):
+        return str(exc)
+    return "問題の準備に失敗しました。少し待つと再試行します"
+
+
 def pick_article() -> Article:
     """記事を1本選ぶ。**問題はまだ作らない。**
 
     作問は予習の60秒のあいだに回す。ここで一緒に作ると、ゲーム開始を
     押した人だけが数十秒待たされ、その間ほかの参加者は何も見えない。
+
+    記事はどちらでも本物を読ませる。モックのときだけ、**手で問題を書いた
+    タイトルの中から**選ぶ（本文はいつも通り Wikipedia から取る）。
     """
     if get_settings().use_mock:
-        return random.choice(ARTICLES)
+        return _pick_real_article(list(mock_data.MOCK_QUESTIONS))
     return _pick_real_article()
 
 
@@ -46,13 +65,22 @@ def make_questions(title: str, extract: str, count: int) -> list[Question]:
     呼び出し側は記事の実体を持たなくてよい（タイトルと本文だけで足りる）。
     """
     if get_settings().use_mock:
-        # モックは記事に問題が同梱されている。経路は実データと同じにしておく
-        article = next((a for a in ARTICLES if a.title == title), None)
-        questions = article.questions[:count] if article else []
-        if not questions:
-            raise NoArticleError(f"固定データに問題がありません: {title}")
-        return questions
+        return _mock_questions(title, count)
     return gemini.make_questions(title, extract, count)
+
+
+def _mock_questions(title: str, count: int) -> list[Question]:
+    """Gemini を呼ばずに、その記事のために書いておいた問題を返す。
+
+    `pick_article` が問題のあるタイトルからしか選ばないので、普通は当たる。
+    当たらないのは、モックに切り替える前に始まったゲームが残っている場合や、
+    問題を消してタイトルだけ残った場合。どちらも設定の間違いなので、
+    それと分かる文言で落とす。
+    """
+    pool = mock_data.MOCK_QUESTIONS.get(title)
+    if not pool:
+        raise NoArticleError(f"モックの問題が用意されていない記事です: {title}")
+    return random.sample(pool, min(count, len(pool)))
 
 
 # ── 実データ ──────────────────────────────────────────────────────
@@ -144,20 +172,25 @@ def _candidates(limit: int = 30) -> list[dict[str, Any]]:
     return [d.to_dict() or {} for d in docs]
 
 
-def _pick_real_article() -> Article:
+def _pick_real_article(only: list[str] | None = None) -> Article:
     """プールから1本選ぶ。無ければ取りに行く。
 
-    プールが空なら、その場で人気記事から作る。初回起動でも遊べるようにするため。
+    `only` を渡すと、その中からしか選ばない（モックでの使い方）。
+    プールに無いタイトルでも、Wikipedia から取ってくるので選べる。
+
+    `only` が無いときは、プールが空ならその場で人気記事から作る。
+    初回起動でも遊べるようにするため。
     """
     pool = _candidates()
-    random.shuffle(pool)
-
-    titles = [str(d["title"]) for d in pool if d.get("title")]
-    if not titles:
-        titles = asyncio.run(wikipedia.fetch_popular_titles(limit=20))
-        random.shuffle(titles)
-
     by_title = {str(d.get("title")): d for d in pool}
+
+    if only is not None:
+        titles = list(only)
+    else:
+        titles = [str(d["title"]) for d in pool if d.get("title")]
+        if not titles:
+            titles = asyncio.run(wikipedia.fetch_popular_titles(limit=20))
+    random.shuffle(titles)
     errors: list[str] = []
 
     # 数本ぶんだけ試す。1本ダメでもゲームが始まらないのは避けたいが、

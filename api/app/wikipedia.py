@@ -192,6 +192,10 @@ def trim_for_study(text: str) -> str:
     """1分で読める分量に切り詰める。
 
     脚注・出典の節は問題の根拠にならないので、そこから先は落とす。
+
+    見出しの「== ==」はここでは外さない。どの行が見出しかを知らないと
+    画面側で太字にできないし、作問に渡す本文でも節の区切りは手がかりになる。
+    記号を外すのは表示の都合なので、表示側でやる（App.tsx の Article）。
     """
     for marker in ("\n== 脚注", "\n== 出典", "\n== 参考文献", "\n== 関連項目", "\n== 外部リンク"):
         idx = text.find(marker)
@@ -199,3 +203,4 @@ def trim_for_study(text: str) -> str:
             text = text[:idx]
             break
     return text[:MAX_CHARS].strip()
+

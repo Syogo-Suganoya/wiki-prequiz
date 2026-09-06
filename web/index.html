@@ -85,6 +85,10 @@
       .article{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;
                margin:.6rem 1rem;padding:1rem;background:#fff;border:var(--line);
                border-radius:12px;white-space:pre-wrap;font-size:.95rem}
+      /* 節の見出し。本文より少しだけ大きくして、上に間を空ける。
+         拾い読みのときに視線が引っかかる程度でよく、章立てを主張させない */
+      .art-h{display:inline-block;font-family:var(--body);font-weight:900;
+             font-size:1.05rem;margin:.6rem 0 .1rem;line-height:1.4}
       .study-foot{flex:none;padding-block:.7rem}
       .skip{width:100%;padding:.6rem;font-family:inherit;font-weight:900;font-size:.85rem;
             background:#EDE9DE;border:2px dashed var(--ink);border-radius:10px;cursor:pointer}
@@ -110,6 +114,11 @@
       .mark b{position:relative;font-family:var(--pop);font-size:.8rem;line-height:1}
 
       .note{font-size:.82rem;opacity:.7;margin:.9rem 0 0}
+      /* うまくいっていないことの知らせ。.note と同じ位置に出るので、
+         薄い字のままだと「ただの補足」に見えて読み飛ばされる */
+      .warn{display:inline-block;font-size:.82rem;font-weight:900;margin:.9rem 0 0;
+            background:var(--yellow);border:2px solid var(--ink);border-radius:99px;
+            padding:.2rem .8rem}
       /* キーボードのある端末にだけ出す案内。端末の種類は CSS が知っているので、
          JS で matchMedia を見て state に持つ必要はない */
       .kbd{white-space:nowrap}
