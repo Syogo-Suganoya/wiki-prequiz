@@ -1,5 +1,12 @@
 name: CD
 
+# 出すのは API（Cloud Run）と Firestore ルールだけ。
+# **フロント（web/ lp/）はここでは出さない。**
+# Vercel の Git 連携が push のたびに vercel.json どおりビルドしているので、
+# ここにも置くと同じ成果物が二重にデプロイされ、どちらが本番か分からなくなる。
+# CD 側へ寄せるなら、vercel.json に "ignoreCommand": "exit 0" を入れて
+# Git 連携を止めてから、Vercel 用のジョブと Secrets を足すこと。
+
 # ── いまは自動デプロイを止めてある ─────────────────────────────
 # デプロイ先がまだ無い状態で main への push に繋ぐと、
 # 失敗通知が出続けるだけで何の役にも立たないため。
@@ -23,13 +30,13 @@ permissions:
   id-token: write # Workload Identity 連携に必要（鍵ファイルを使わないため）
 
 jobs:
-  # web だけの変更で Cloud Run を再デプロイしないよう、何が変わったかを先に見る
+  # フロント（web/ lp/）だけの変更で Cloud Run を再デプロイしないよう、
+  # 何が変わったかを先に見る
   changes:
     name: 変更範囲の判定
     runs-on: ubuntu-latest
     outputs:
       api: ${{ steps.filter.outputs.api }}
-      web: ${{ steps.filter.outputs.web }}
       firebase: ${{ steps.filter.outputs.firebase }}
     steps:
       - uses: actions/checkout@v4
@@ -39,12 +46,6 @@ jobs:
           filters: |
             api:
               - 'api/**'
-            # LP とゲームは1つの Vercel プロジェクトに載る（vercel.json 参照）。
-            # どちらが変わっても同じデプロイをやり直す
-            web:
-              - 'web/**'
-              - 'lp/**'
-              - 'vercel.json'
             firebase:
               - 'firebase/firestore.rules'
               - 'firebase/firestore.indexes.json'
@@ -126,28 +127,3 @@ jobs:
             || { echo "本番なのにモックのまま（USE_MOCK か GEMINI_API_KEY の設定漏れ）"; exit 1; }
           echo "$BODY" | grep -q '"missing_settings":\[\]' \
             || { echo "足りない設定がある"; exit 1; }
-
-  web:
-    name: LP + Web → Vercel
-    needs: [changes, api]
-    # api を飛ばした場合でも web は動かしたい
-    if: |
-      always() &&
-      needs.api.result != 'failure' &&
-      (needs.changes.outputs.web == 'true' || github.event_name == 'workflow_dispatch')
-    runs-on: ubuntu-latest
-    env:
-      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-      - run: npm install -g vercel
-      # ビルドの起点はリポジトリ直下。vercel.json が lp/ と web/ をまとめる
-      - name: デプロイ
-        run: |
-          vercel pull --yes --environment=production --token="${{ secrets.VERCEL_TOKEN }}"
-          vercel build --prod --token="${{ secrets.VERCEL_TOKEN }}"
-          vercel deploy --prebuilt --prod --token="${{ secrets.VERCEL_TOKEN }}"
