@@ -7,8 +7,8 @@ Wikipedia の記事を **1分だけ予習**して、あとは早押しでクイ�
 記事は1ゲームに1本だけ。その1本を全員で読んでから、そこから3問が出ます。
 
 > [バキ童チャンネル【ぐんぴぃ】](https://www.youtube.com/@bakibakiDT) の
-> [テスト期間を思い出せ！お題のWiki記事を1分だけ予習できる山張り暗記クイズ](https://www.youtube.com/watch?v=ynQPsNxLPOo) と
-> [【数クイズ】クイズの答えがそのまま得点になるクイズで盛り上がろう！](https://www.youtube.com/watch?v=l1G6pRrfMZg) を元ネタにした、
+> [テスト期間を思い出せ！お題のWiki記事を1分だけ予習できる山張り暗記クイズ](https://www.youtube.com/watch?v=ynQPsNxLPOo) を元ネタにしました。
+> さらに、点数計算は [【数クイズ】クイズの答えがそのまま得点になるクイズで盛り上がろう！](https://www.youtube.com/watch?v=l1G6pRrfMZg) を参考にしました。
 > 個人開発の非公式ファンメイド作品です。チャンネルおよび動画制作者とは関係ありません。
 
 ## 遊びかた
@@ -32,7 +32,7 @@ Wikipedia の記事を **1分だけ予習**して、あとは早押しでクイ�
 
 正解したときの点数の決まり方が変わります。既定は固定点。
 
-<img src="lp/shots/02-modes.png" alt="3つのゲームモードの説明モーダル" width="420">
+<img src="lp/shots/02-modes.png" alt="3つのゲームモードの説明モーダル">
 
 | モード | 配点 |
 | :--- | :--- |
