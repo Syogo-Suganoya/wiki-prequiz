@@ -7,8 +7,8 @@ Wikipedia の記事を **1分だけ予習**して、あとは早押しでクイ�
 記事は1ゲームに1本だけ。その1本を全員で読んでから、そこから3問が出ます。
 
 > [バキ童チャンネル【ぐんぴぃ】](https://www.youtube.com/@bakibakiDT) の
-> [Wikipedia1分予習クイズ](https://www.youtube.com/watch?v=RWWp09sJ54I) と
-> [数クイズ](https://www.youtube.com/watch?v=33jR5YAt23g) を元ネタにした、
+> [テスト期間を思い出せ！お題のWiki記事を1分だけ予習できる山張り暗記クイズ](https://www.youtube.com/watch?v=ynQPsNxLPOo) と
+> [【数クイズ】クイズの答えがそのまま得点になるクイズで盛り上がろう！](https://www.youtube.com/watch?v=l1G6pRrfMZg) を元ネタにした、
 > 個人開発の非公式ファンメイド作品です。チャンネルおよび動画制作者とは関係ありません。
 
 ## 遊びかた
