@@ -2,22 +2,13 @@ name: CD
 
 # 出すのは API（Cloud Run）と Firestore ルールだけ。
 # **フロント（web/ lp/）はここでは出さない。**
-# Vercel の Git 連携が push のたびに vercel.json どおりビルドしているので、
-# ここにも置くと同じ成果物が二重にデプロイされ、どちらが本番か分からなくなる。
-# CD 側へ寄せるなら、vercel.json に "ignoreCommand": "exit 0" を入れて
-# Git 連携を止めてから、Vercel 用のジョブと Secrets を足すこと。
 
-# ── いまは自動デプロイを止めてある ─────────────────────────────
-# デプロイ先がまだ無い状態で main への push に繋ぐと、
-# 失敗通知が出続けるだけで何の役にも立たないため。
-#
-# 下の push: ブロックのコメントを外すと動きだす。
-# その前に Workload Identity 連携と Secrets を用意し、
-# 一度 workflow_dispatch で手動実行して通ることを確かめること。
-#
-# push:
-#   branches: [main]
+# main への push で自動デプロイする。
+# 手で流したいとき（設定を変えただけで再デプロイしたいとき）のために
+# workflow_dispatch も残してある。
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 # デプロイ中に次のデプロイを重ねない。打ち切らずに順番待ちさせる
