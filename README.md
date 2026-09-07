@@ -3,10 +3,6 @@
 Wikipedia の記事を **1分だけ予習**して、あとは早押しでクイズに答えるオンライン対戦ゲーム。
 
 記事は1ゲームに1本だけ。その1本を全員で読んでから、そこから3問が出ます。
-どこが問われるかは誰も教えてくれないので、**ヤマを張って読む**ことがそのまま戦略になります。
-
-問題と選択肢は同時に出て、**最初に選んだ1人の解答だけ**が成立します。
-正解なら加点、外せば同じだけ減点。答えなければ増減なし。
 
 > [バキ童チャンネル【ぐんぴぃ】](https://www.youtube.com/@bakibakiDT) の
 > [Wikipedia1分予習クイズ](https://www.youtube.com/watch?v=RWWp09sJ54I) と
@@ -15,9 +11,12 @@ Wikipedia の記事を **1分だけ予習**して、あとは早押しでクイ�
 
 ## 遊びかた
 
-1. **予習（60秒）** — 渡された Wikipedia の記事を読む。全員が同じ記事を読みます。
-2. **クイズ** — 記事が消え、問題と選択肢が出る。いちばん早く選んだ人の解答で決まり。
-3. **結果** — 順位と、今回読んだ記事へのリンクが出ます。
+| 1. 予習（60秒） | 2. クイズ | 3. 結果 |
+| :---: | :---: | :---: |
+| <img src="lp/shots/05-study.png" alt="予習画面。東京タワーの記事本文が表示されている" width="280"> | <img src="lp/shots/06-question.png" alt="解答画面。記事が消えて4択が出ている" width="280"> | <img src="lp/shots/08-result.png" alt="結果画面。順位と読んだ記事へのリンク" width="280"> |
+| 渡された Wikipedia の記事を読む。全員が同じ記事 | **記事が消えて**問題が出る。いちばん早く選んだ人の解答で決まり | 順位と、今回読んだ記事へのリンク |
+
+記事が消えるところが要です。**覚えていないと答えられません。**
 
 遊びかたは3つ。
 
@@ -31,35 +30,58 @@ Wikipedia の記事を **1分だけ予習**して、あとは早押しでクイ�
 
 正解したときの点数の決まり方が変わります。既定は固定点。
 
+<img src="lp/shots/02-modes.png" alt="3つのゲームモードの説明モーダル" width="420">
+
 | モード | 配点 |
 | :--- | :--- |
 | **固定点** | 常に 1,000 点 |
 | **人気度** | 記事の PV 数 ＋ 被リンク数 × 100 |
-| **最大数値** | 記事の中でいちばん大きい数字。記事によって桁が大きく振れます |
+| **最大数値** | 記事の中でいちばん大きい数字 |
+
+<br clear="all">
 
 問題数（1〜3問）と予習時間（30/60/90秒）は設定画面で変更できます。
-設定は保存され、次に遊ぶときも引き継がれます。
 
 ## 技術構成
 
-| 区分 | 技術 |
-| :--- | :--- |
-| フロントエンド | React + Vite + TypeScript（Vercel） |
-| API | Python 3.12 + FastAPI（Cloud Run） |
-| データストア | Firebase Firestore |
-| 認証 | Firebase Authentication（匿名認証） |
-| 問題生成 | Google Gemini `gemini-3.8-flash`（構造化出力） |
-| 記事取得 | Wikipedia / Wikimedia REST API |
+![本番構成](docs/architecture_production.png)
 
-## ドキュメント
+**フロントエンド**
 
-開発環境の構築、確認コマンド、コードの約束は [CONTRIBUTING.md](CONTRIBUTING.md)。
+![React](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black)
+![Vite](https://img.shields.io/badge/Vite-8-646CFF?style=flat-square&logo=vite&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-7-3178C6?style=flat-square&logo=typescript&logoColor=white)
+![Zustand](https://img.shields.io/badge/Zustand-5-433E38?style=flat-square)
+![Vercel](https://img.shields.io/badge/Vercel-000000?style=flat-square&logo=vercel&logoColor=white)
 
-## リンク
+**API**
 
-* リポジトリ: https://github.com/Syogo-Suganoya/wiki-prequiz
-* 本番: https://wiki-prequiz.vercel.app
+![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=flat-square&logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white)
+![Cloud Run](https://img.shields.io/badge/Cloud%20Run-4285F4?style=flat-square&logo=googlecloud&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat-square&logo=docker&logoColor=white)
 
-## ライセンス
+**データ・AI**
 
-未定（個人開発）。
+![Firestore](https://img.shields.io/badge/Firestore-FFCA28?style=flat-square&logo=firebase&logoColor=black)
+![Gemini](https://img.shields.io/badge/Gemini%203.8%20Flash-8E75B2?style=flat-square&logo=googlegemini&logoColor=white)
+![Wikipedia](https://img.shields.io/badge/Wikimedia%20REST%20API-000000?style=flat-square&logo=wikipedia&logoColor=white)
+
+**開発・CI**
+
+![GitHub Actions](https://img.shields.io/badge/GitHub%20Actions-2088FF?style=flat-square&logo=githubactions&logoColor=white)
+![Ruff](https://img.shields.io/badge/Ruff-D7FF64?style=flat-square&logo=ruff&logoColor=black)
+![mypy](https://img.shields.io/badge/mypy--strict-2A6DB2?style=flat-square)
+
+## 今後の展望
+
+遊べる状態にはなっていますが、代用のまま残しているところがあります。
+上の2つは**早押しゲームとしての土台**なので、他より先に手を入れます。
+
+| やること | いまの状態 | なぜ |
+| :--- | :--- | :--- |
+| **Firestore の直接購読**（`onSnapshot`） | 400ms ごとの API ポーリング | ミリ秒を競うゲームで、画面の切り替わりが**最大0.4秒遅れる**。読み取り回数も無駄に増える |
+| **Firebase 匿名認証** | `X-Player-Id` ヘッダを信用 | 他人の ID を名乗れてしまう。セキュリティルールが前提にしている `request.auth` も埋まらない |
+| **自由記述モード** | 4択のみ | 設計はしてあるが未実装。正規化で一致を見て、揺れだけ AI に判定させる |
+| **記事プールの管理画面** | Firestore コンソールで `enabled` を手で切り替え | 出題に向かない記事を落とす作業が続くなら、専用の画面が要る |
+| **1ゲームの問題数を増やす** | 上限3問 | 記事1本から何問まで出せて、60秒の予習で答えられるかは試していない |
