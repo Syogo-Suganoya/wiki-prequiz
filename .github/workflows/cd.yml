@@ -4,7 +4,6 @@ name: CD
 # デプロイ先がまだ無い状態で main への push に繋ぐと、
 # 失敗通知が出続けるだけで何の役にも立たないため。
 #
-# 有効にする手順は DEPLOY.md「7. CD（GitHub Actions）」を参照。
 # 下の push: ブロックのコメントを外すと動きだす。
 # その前に Workload Identity 連携と Secrets を用意し、
 # 一度 workflow_dispatch で手動実行して通ることを確かめること。
@@ -93,6 +92,10 @@ jobs:
 
       - uses: google-github-actions/setup-gcloud@v2
 
+      # --set-env-vars と --set-secrets は追記ではなく全置換。
+      # ここに書き漏らした設定は、デプロイのたびに本番から消える。
+      # USE_MOCK と ADMIN_TOKEN を落とすと、本番がモックに戻り
+      # 記事プールの補充口が 503 になる
       - name: デプロイ
         run: |
           gcloud run deploy prequiz-api \
@@ -102,8 +105,8 @@ jobs:
             --service-account "${{ secrets.CLOUD_RUN_SERVICE_ACCOUNT }}" \
             --min-instances=1 \
             --allow-unauthenticated \
-            --set-env-vars "FIREBASE_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }},GEMINI_MODEL=gemini-3.8-flash,WIKIMEDIA_USER_AGENT=${{ secrets.WIKIMEDIA_USER_AGENT }},CORS_ORIGINS=${{ secrets.CORS_ORIGINS }}" \
-            --set-secrets "GEMINI_API_KEY=gemini-api-key:latest"
+            --set-env-vars "FIREBASE_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }},GEMINI_MODEL=gemini-3.8-flash,WIKIMEDIA_USER_AGENT=${{ secrets.WIKIMEDIA_USER_AGENT }},CORS_ORIGINS=${{ secrets.CORS_ORIGINS }},USE_MOCK=false" \
+            --set-secrets "GEMINI_API_KEY=gemini-api-key:latest,ADMIN_TOKEN=admin-token:latest"
 
       # エミュレータ向けの設定が紛れ込んでいないかを、出した直後に確かめる。
       # FIRESTORE_EMULATOR_HOST が残っていると全機能が落ちる
@@ -119,6 +122,10 @@ jobs:
             || { echo "本番なのにエミュレータへ向いている"; exit 1; }
           echo "$BODY" | grep -q '"firestore":"ok"' \
             || { echo "Firestore に繋がっていない"; exit 1; }
+          echo "$BODY" | grep -q '"mock":false' \
+            || { echo "本番なのにモックのまま（USE_MOCK か GEMINI_API_KEY の設定漏れ）"; exit 1; }
+          echo "$BODY" | grep -q '"missing_settings":\[\]' \
+            || { echo "足りない設定がある"; exit 1; }
 
   web:
     name: LP + Web → Vercel
