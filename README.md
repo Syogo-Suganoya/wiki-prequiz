@@ -1,4 +1,6 @@
-# wiki-prequiz — 1分間予習クイズ
+# 1分間予習クイズ
+
+![alt text](lp/shots/top.png)
 
 Wikipedia の記事を **1分だけ予習**して、あとは早押しでクイズに答えるオンライン対戦ゲーム。
 
