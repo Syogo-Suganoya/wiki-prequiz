@@ -53,12 +53,7 @@ Wikipedia の記事を **1分だけ予習**して、あとは早押しでクイ�
 
 ## ドキュメント
 
-| ファイル | 内容 |
-| :--- | :--- |
-| [DESIGN.md](DESIGN.md) | 基本設計書。**なぜその作りにしたか**はすべてここ |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | 開発環境の構築、確認コマンド、コードの約束 |
-| [DEPLOY.md](DEPLOY.md) | 本番へのデプロイ手順（CLI / GUI）と CD の設定 |
-| [TODO.md](TODO.md) | 本番を実データで動かすまでの残り手順 |
+開発環境の構築、確認コマンド、コードの約束は [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 ## リンク
 

@@ -13,6 +13,4 @@ docs/
 .github/
 compose.yaml
 .dockerignore
-DESIGN.md
-DEPLOY.md
 CONTRIBUTING.md
